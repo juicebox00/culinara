@@ -45,7 +45,7 @@ class _SplashScreenState extends State<SplashScreen> {
             duration: Duration(seconds: 1),
             curve: Curves.elasticOut,
             child: Image.asset(
-              'assets/culinara_logo.png',
+              'images/culinara_logo.png',
               width: 200,
             ),
           ),

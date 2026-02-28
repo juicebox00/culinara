@@ -34,6 +34,15 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  google_fonts: ^8.0.2
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  cloud_firestore: ^6.1.2
+  firebase_storage: ^13.0.6
+  image_picker: ^1.2.1
+  cached_network_image: ^3.4.1
+  percent_indicator: ^4.2.5
+  confetti: ^0.8.0
 
 dev_dependencies:
   flutter_test:
@@ -57,9 +66,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/culinara_logo.png
-    - assets/culinara_tile_pattern.png
-    - assets/placeholder_thumbnail.png
+    - images/culinara_logo.png
+    - images/culinara_tile_pattern.png
+    - images/placeholder_thumbnail.png
     
 
   # To add assets to your application, add an assets section, like this:

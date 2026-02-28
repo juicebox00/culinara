@@ -37,7 +37,7 @@ class _MovingTilePatternState extends State<MovingTilePattern> with SingleTicker
           child: Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/culinara_tile_pattern.png'),
+                image: AssetImage('images/culinara_tile_pattern.png'),
                 repeat: ImageRepeat.repeat,
                 alignment: Alignment(
                   _controller.value * 2.0, 
