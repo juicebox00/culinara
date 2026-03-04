@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'home_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../home/home_page.dart';
+import '../auth/login_page.dart';
+import '../../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,6 +15,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   double _opacity = 0.0;
   double _scale = 0.5;
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -25,11 +29,26 @@ class _SplashScreenState extends State<SplashScreen> {
     });
 
     Timer(Duration(seconds: 3), () {
+      _navigateToNextPage();
+    });
+  }
+
+  void _navigateToNextPage() {
+    User? user = _authService.currentUser;
+    
+    if (user != null) {
+      // User is logged in
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => HomePage()),
       );
-    });
+    } else {
+      // User is not logged in, show login page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginPage()),
+      );
+    }
   }
 
   @override

@@ -39,6 +39,7 @@ dependencies:
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
   firebase_storage: ^13.0.6
+  http: ^1.2.0
   image_picker: ^1.2.1
   cached_network_image: ^3.4.1
   percent_indicator: ^4.2.5
@@ -69,6 +70,9 @@ flutter:
     - images/culinara_logo.png
     - images/culinara_tile_pattern.png
     - images/placeholder_thumbnail.png
+    - images/chef hat.png
+    - images/Spoon&Fork.png
+    - images/SadPlate.png
     
 
   # To add assets to your application, add an assets section, like this:
