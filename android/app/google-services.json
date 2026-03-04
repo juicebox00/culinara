@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "640935250132",
+    "project_id": "culinara-9946b",
+    "storage_bucket": "culinara-9946b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:640935250132:android:edb88410b5d5de30b7d341",
+        "android_client_info": {
+          "package_name": "com.example.culinara"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7c3Ee5ZL_OcUciv2Tu5JqnW3ORKhToAw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

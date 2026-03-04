@@ -21,6 +21,13 @@ class RecipeDetailPage extends StatefulWidget {
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
   late Recipe recipe;
 
+  ImageProvider<Object> get _coverImage {
+    if (recipe.coverImageBytes != null) {
+      return MemoryImage(recipe.coverImageBytes!);
+    }
+    return AssetImage(recipe.imagePath);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -31,13 +38,21 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Recipe', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete this recipe?', 
-          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Delete Recipe',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete this recipe?',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -45,7 +60,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               Navigator.pop(context);
               Navigator.pop(context);
             },
-            child: Text('Delete', 
+            child: Text(
+              'Delete',
               style: GoogleFonts.fredoka(
                 fontWeight: FontWeight.bold,
                 color: Colors.red,
@@ -61,7 +77,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(recipe.title, style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+        title: Text(
+          recipe.title,
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Color(0xFFC9975C),
         elevation: 0,
       ),
@@ -74,13 +93,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               width: double.infinity,
               height: 300,
               decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(recipe.imagePath),
-                  fit: BoxFit.cover,
-                ),
+                image: DecorationImage(image: _coverImage, fit: BoxFit.cover),
               ),
             ),
-            
+
             // Recipe Details
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -95,26 +111,34 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Pin Button
                   ElevatedButton.icon(
                     onPressed: () {
                       widget.onPin(recipe);
                       setState(() {});
                     },
-                    icon: Icon(recipe.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+                    icon: Icon(
+                      recipe.isPinned
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                    ),
                     label: Text(
                       recipe.isPinned ? 'Unpin' : 'Pin',
                       style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: recipe.isPinned ? Color(0xFFFFD54F) : Color(0xFF8B5E3C),
-                      foregroundColor: recipe.isPinned ? Colors.black : Colors.white,
+                      backgroundColor: recipe.isPinned
+                          ? Color(0xFFFFD54F)
+                          : Color(0xFF8B5E3C),
+                      foregroundColor: recipe.isPinned
+                          ? Colors.black
+                          : Colors.white,
                     ),
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Mark as Cooked Button
                   ElevatedButton.icon(
                     onPressed: () {
@@ -122,20 +146,26 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                         recipe.cooked = !recipe.cooked;
                       });
                     },
-                    icon: Icon(recipe.cooked ? Icons.check_circle : Icons.circle_outlined),
+                    icon: Icon(
+                      recipe.cooked
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                    ),
                     label: Text(
                       recipe.cooked ? 'Mark as Uncooked' : 'Mark as Cooked',
                       style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: recipe.cooked ? Colors.green : Color(0xFF8B5E3C),
+                      backgroundColor: recipe.cooked
+                          ? Colors.green
+                          : Color(0xFF8B5E3C),
                       foregroundColor: Colors.white,
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
-                  // Recipe Content Placeholder
+
+                  // Recipe Content
                   Text(
                     'Recipe Details',
                     style: GoogleFonts.fredoka(
@@ -144,13 +174,33 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Ingredients, instructions, and more would go here.',
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                  _buildDetailSection('Ingredients', recipe.ingredients),
+                  const SizedBox(height: 10),
+                  _buildDetailSection('Directions', recipe.directions),
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
+                    'Serving Size',
+                    recipe.servingSize.isEmpty
+                        ? 'Not specified'
+                        : recipe.servingSize,
                   ),
-                  
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
+                    'Cooking Time',
+                    recipe.cookingTime.isEmpty
+                        ? 'Not specified'
+                        : recipe.cookingTime,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
+                    'Tags',
+                    recipe.tags.isEmpty
+                        ? 'No tags added'
+                        : recipe.tags.map((tag) => '#$tag').join(', '),
+                  ),
+
                   const SizedBox(height: 32),
-                  
+
                   // Edit and Delete Buttons
                   Row(
                     children: [
@@ -160,8 +210,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                             // Edit functionality would go here
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Edit feature coming soon',
-                                  style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                                content: Text(
+                                  'Edit feature coming soon',
+                                  style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             );
@@ -169,7 +222,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           icon: Icon(Icons.edit),
                           label: Text(
                             'Edit',
-                            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                            style: GoogleFonts.fredoka(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Color(0xFF8B5E3C),
@@ -184,7 +239,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           icon: Icon(Icons.delete),
                           label: Text(
                             'Delete',
-                            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                            style: GoogleFonts.fredoka(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
@@ -200,6 +257,24 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailSection(String title, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.fredoka(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF5D4A3A),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+      ],
     );
   }
 }

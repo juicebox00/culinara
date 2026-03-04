@@ -50,7 +50,7 @@ class CulinaraBottomNavBar extends StatelessWidget {
       currentIndex: currentIndex,
       onTap: onTap,
       type: BottomNavigationBarType.fixed,
-      backgroundColor: Color(0xFFC9975C),
+      backgroundColor: Color.fromARGB(255, 194, 143, 96),
       selectedItemColor: Colors.white,
       unselectedItemColor: Colors.white70,
       showUnselectedLabels: true,

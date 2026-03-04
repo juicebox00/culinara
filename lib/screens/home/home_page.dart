@@ -1,12 +1,15 @@
-import 'package:culinara/moving_tile_pattern.dart';
+import 'package:culinara/widgets/moving_tile_pattern.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:culinara/recipe_card.dart';
-import 'package:culinara/search_bar.dart';
-import 'package:culinara/bottom_nav_bar.dart';
+import 'package:culinara/widgets/recipe_card.dart';
+import 'package:culinara/widgets/search_bar.dart';
+import 'package:culinara/widgets/bottom_nav_bar.dart';
 import 'package:culinara/models/recipe.dart';
 import 'package:culinara/recipe_detail_page.dart';
 import 'package:culinara/randomizer_page.dart';
+import 'package:culinara/screens/home/add_recipe_page.dart';
+import 'package:culinara/screens/home/tags_page.dart';
+import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -30,50 +33,15 @@ class _HomePageState extends State<HomePage> {
         id: '1',
         title: 'Pork Sinigang',
         imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: true,
-        cooked: true,
-      ),
-      Recipe(
-        id: '2',
-        title: 'Pork Adobo',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: true,
-        cooked: false,
-      ),
-      Recipe(
-        id: '3',
-        title: 'Chicken Tinola',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: true,
-        cooked: false,
-      ),
-      Recipe(
-        id: '4',
-        title: 'Menudo',
-        imagePath: 'images/placeholder_thumbnail.png',
         isPinned: false,
         cooked: true,
-      ),
-      Recipe(
-        id: '5',
-        title: 'Sinigang na Baka',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: false,
-        cooked: false,
-      ),
-      Recipe(
-        id: '6',
-        title: 'Lumpia Shanghai',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: false,
-        cooked: true,
-      ),
-      Recipe(
-        id: '7',
-        title: 'Fried Chicken',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: false,
-        cooked: false,
+        ingredients:
+            '1 kg pork ribs\n8 cups water\n2 tomatoes\n1 onion\n2 tbsp fish sauce\n1 packet sinigang mix\n1 radish\n1 eggplant\n1 bunch kangkong',
+        directions:
+            '1. Boil pork ribs until tender.\n2. Add onion and tomatoes, simmer for 10 minutes.\n3. Stir in fish sauce and sinigang mix.\n4. Add radish and eggplant; cook until tender.\n5. Add kangkong and serve hot.',
+        servingSize: '4 servings',
+        cookingTime: '1 hr 10 mins',
+        tags: ['filipino', 'soup', 'comfort food'],
       ),
     ];
   }
@@ -113,6 +81,31 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openAddRecipePage() async {
+    final newRecipe = await Navigator.push<Recipe>(
+      context,
+      MaterialPageRoute(builder: (_) => const AddRecipePage()),
+    );
+
+    if (newRecipe == null) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+
+    setState(() {
+      recipes = [newRecipe, ...recipes];
+      _selectedIndex = 0;
+    });
+  }
+
+  void _onBottomNavTap(int idx) {
+    if (idx == 2) {
+      _openAddRecipePage();
+      return;
+    }
+    setState(() => _selectedIndex = idx);
   }
 
   List<Recipe> _getSortedAndFilteredRecipes(List<Recipe> recipeList) {
@@ -279,19 +272,26 @@ class _HomePageState extends State<HomePage> {
               ),
               _buildRecipeCount(recipes.length),
 
+              if (recipes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 30, 16, 0),
+                  child: _buildEmptyState(),
+                ),
+
               // Pinned recipes section
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (pinnedRecipes.isNotEmpty) ...[
-                      Text(
-                        'Pinned',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                    Text(
+                      'Pinned',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 8),
+                    if (pinnedRecipes.isNotEmpty)
                       GridView.count(
                         crossAxisCount: 3,
                         shrinkWrap: true,
@@ -307,26 +307,28 @@ class _HomePageState extends State<HomePage> {
                             onTap: () => _onRecipeCardTap(recipe),
                           );
                         }).toList(),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
 
               // Unpinned recipes section
-              if (unpinnedRecipes.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Recipes',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Recipes',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 8),
+                    if (unpinnedRecipes.isNotEmpty)
                       GridView.count(
                         crossAxisCount: 2,
                         shrinkWrap: true,
@@ -343,17 +345,25 @@ class _HomePageState extends State<HomePage> {
                               );
                             })
                             .toList(),
-                      ),
-                    ],
-                  ),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                  ],
                 ),
+              ),
               const SizedBox(height: 20),
             ],
           ),
         );
         break;
+      case 1:
+        content = TagsPage(recipes: recipes);
+        break;
       case 3:
         content = const RandomizerPage();
+        break;
+      case 4:
+        content = const SettingsPage();
         break;
       default:
         content = Center(
@@ -374,7 +384,7 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: CulinaraBottomNavBar(
         currentIndex: _selectedIndex,
-        onTap: (idx) => setState(() => _selectedIndex = idx),
+        onTap: _onBottomNavTap,
       ),
     );
   }
@@ -394,6 +404,61 @@ class _HomePageState extends State<HomePage> {
           color: Colors.white,
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5E6D3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF8B6F47), width: 2),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.menu_book_rounded,
+            size: 44,
+            color: Color(0xFF8B6F47),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No recipes yet',
+            style: GoogleFonts.fredoka(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF5D4A3A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tap the + button below to create your first recipe.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.fredoka(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF5D4A3A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: _openAddRecipePage,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 194, 143, 96),
+              foregroundColor: Colors.white,
+              side: const BorderSide(
+                color: Color.fromARGB(255, 93, 74, 58),
+                width: 2,
+              ),
+            ),
+            child: Text(
+              'Create Recipe',
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
