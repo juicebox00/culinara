@@ -18,87 +18,113 @@ class RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color borderColor = recipe.isPinned ? Colors.orangeAccent : Color(0xFF8B5E3C);
-    final Color labelBgColor = recipe.isPinned ? Color(0xFFFFD54F) : Color(0xFFF5E6D3);
-
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor, width: 2),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
-                    child: Image.asset(
-                      recipe.imagePath,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-                  ),
-                  if (recipe.cooked)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Icon(
-                        Icons.check_circle,
-                        color: Colors.greenAccent,
-                        size: 24,
-                      ),
-                    ),
-                ],
-              ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
             ),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              width: double.infinity,
-              color: labelBgColor,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Column(
                 children: [
                   Expanded(
-                    child: Text(
-                      recipe.title,
-                      style: GoogleFonts.fredoka(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Image.asset(
+                            recipe.imagePath,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                          ),
+                        ),
+                        if (recipe.cooked)
+                          Positioned(
+                            bottom: 6,
+                            right: 6,
+                            child: Image.asset(
+                              'images/cooked_stamp.png',
+                              width: 52,
+                              height: 52,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  PopupMenuButton(
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        child: Row(
-                          children: [
-                            Icon(
-                              recipe.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                              size: 18,
-                            ),
-                            SizedBox(width: 8),
-                            Text(recipe.isPinned ? 'Unpin' : 'Pin',
-                              style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          recipe.title,
+                          style: GoogleFonts.fredoka(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: () {
-                          onPin(recipe);
-                        },
+                      ),
+                      PopupMenuButton<String>(
+                        onSelected: (_) => onPin(recipe),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'toggle_pin',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isPinned
+                                      ? Icons.push_pin
+                                      : Icons.push_pin_outlined,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  isPinned ? 'Unpin' : 'Pin',
+                                  style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: const Icon(Icons.more_vert, size: 18),
                       ),
                     ],
-                    child: Icon(Icons.more_vert, size: 18),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          if (isPinned)
+            Positioned(
+              top: -14,
+              right: 8,
+              child: Image.asset(
+                'images/red_thumbtack.png',
+                width: 28,
+                height: 28,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+        ],
       ),
     );
   }

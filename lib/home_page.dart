@@ -17,7 +17,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  
+
   late List<Recipe> recipes;
   String _sortBy = 'recent'; // 'recent' or 'a-z'
   String _filterBy = 'all'; // 'all', 'cooked', 'uncooked'
@@ -26,20 +26,62 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     recipes = [
-      Recipe(id: '1', title: 'Pork Sinigang', imagePath: 'images/placeholder_thumbnail.png', isPinned: true, cooked: true),
-      Recipe(id: '2', title: 'Pork Adobo', imagePath: 'images/placeholder_thumbnail.png', isPinned: true, cooked: false),
-      Recipe(id: '3', title: 'Chicken Tinola', imagePath: 'images/placeholder_thumbnail.png', isPinned: true, cooked: false),
-      Recipe(id: '4', title: 'Menudo', imagePath: 'images/placeholder_thumbnail.png', isPinned: false, cooked: true),
-      Recipe(id: '5', title: 'Sinigang na Baka', imagePath: 'images/placeholder_thumbnail.png', isPinned: false, cooked: false),
-      Recipe(id: '6', title: 'Lumpia Shanghai', imagePath: 'images/placeholder_thumbnail.png', isPinned: false, cooked: true),
-      Recipe(id: '7', title: 'Fried Chicken', imagePath: 'images/placeholder_thumbnail.png', isPinned: false, cooked: false),
+      Recipe(
+        id: '1',
+        title: 'Pork Sinigang',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: true,
+        cooked: true,
+      ),
+      Recipe(
+        id: '2',
+        title: 'Pork Adobo',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: true,
+        cooked: false,
+      ),
+      Recipe(
+        id: '3',
+        title: 'Chicken Tinola',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: true,
+        cooked: false,
+      ),
+      Recipe(
+        id: '4',
+        title: 'Menudo',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: false,
+        cooked: true,
+      ),
+      Recipe(
+        id: '5',
+        title: 'Sinigang na Baka',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: false,
+        cooked: false,
+      ),
+      Recipe(
+        id: '6',
+        title: 'Lumpia Shanghai',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: false,
+        cooked: true,
+      ),
+      Recipe(
+        id: '7',
+        title: 'Fried Chicken',
+        imagePath: 'images/placeholder_thumbnail.png',
+        isPinned: false,
+        cooked: false,
+      ),
     ];
   }
 
   void _onRecipePin(Recipe recipe) {
     setState(() {
       List<Recipe> pinnedRecipes = recipes.where((r) => r.isPinned).toList();
-      
+
       if (recipe.isPinned) {
         // Unpinning
         recipe.isPinned = false;
@@ -117,7 +159,10 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             RadioListTile(
-              title: Text('Most Recent', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              title: Text(
+                'Most Recent',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+              ),
               value: 'recent',
               groupValue: _sortBy,
               onChanged: (value) {
@@ -126,7 +171,10 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             RadioListTile(
-              title: Text('A - Z', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              title: Text(
+                'A - Z',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+              ),
               value: 'a-z',
               groupValue: _sortBy,
               onChanged: (value) {
@@ -143,7 +191,10 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             RadioListTile(
-              title: Text('All', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              title: Text(
+                'All',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+              ),
               value: 'all',
               groupValue: _filterBy,
               onChanged: (value) {
@@ -152,7 +203,10 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             RadioListTile(
-              title: Text('Cooked', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              title: Text(
+                'Cooked',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+              ),
               value: 'cooked',
               groupValue: _filterBy,
               onChanged: (value) {
@@ -161,7 +215,10 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             RadioListTile(
-              title: Text('Uncooked', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)),
+              title: Text(
+                'Uncooked',
+                style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+              ),
               value: 'uncooked',
               groupValue: _filterBy,
               onChanged: (value) {
@@ -199,16 +256,21 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 4.0,
+                ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: const CulinaraSearchBar(),
-                    ),
+                    Expanded(child: const CulinaraSearchBar()),
                     SizedBox(width: 8),
                     IconButton(
                       onPressed: _showSortFilterDialog,
-                      icon: Icon(Icons.tune, color: Color(0xFF8B5E3C), size: 28),
+                      icon: Icon(
+                        Icons.tune,
+                        color: Color(0xFF8B5E3C),
+                        size: 28,
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: BoxConstraints(),
                     ),
@@ -216,7 +278,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               _buildRecipeCount(recipes.length),
-              
+
               // Pinned recipes section
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -226,9 +288,8 @@ class _HomePageState extends State<HomePage> {
                     if (pinnedRecipes.isNotEmpty) ...[
                       Text(
                         'Pinned',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       GridView.count(
@@ -262,9 +323,8 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Text(
                         'Recipes',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       GridView.count(
@@ -273,14 +333,16 @@ class _HomePageState extends State<HomePage> {
                         physics: NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
-                        children: _getSortedAndFilteredRecipes(unpinnedRecipes).map((recipe) {
-                          return RecipeCard(
-                            recipe: recipe,
-                            isPinned: false,
-                            onPin: _onRecipePin,
-                            onTap: () => _onRecipeCardTap(recipe),
-                          );
-                        }).toList(),
+                        children: _getSortedAndFilteredRecipes(unpinnedRecipes)
+                            .map((recipe) {
+                              return RecipeCard(
+                                recipe: recipe,
+                                isPinned: false,
+                                onPin: _onRecipePin,
+                                onTap: () => _onRecipeCardTap(recipe),
+                              );
+                            })
+                            .toList(),
                       ),
                     ],
                   ),
@@ -291,10 +353,15 @@ class _HomePageState extends State<HomePage> {
         );
         break;
       case 3:
-        content = RandomizerPage(recipes: recipes);
+        content = const RandomizerPage();
         break;
       default:
-        content = Center(child: Text('Not implemented', style: GoogleFonts.fredoka(fontWeight: FontWeight.bold)));
+        content = Center(
+          child: Text(
+            'Not implemented',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          ),
+        );
     }
 
     // unified scaffold for all pages
@@ -321,11 +388,13 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Color(0xFF8B4513), width: 2),
       ),
-      child: Text("Recipe Count: $count", 
+      child: Text(
+        "Recipe Count: $count",
         style: GoogleFonts.fredoka(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-        )),
+        ),
+      ),
     );
   }
 }
