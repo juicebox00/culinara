@@ -4,12 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../home/home_page.dart';
 import '../auth/login_page.dart';
 import '../../services/auth_service.dart';
+import '../../services/background_music_service.dart';
+import '../../services/ui_sound_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  _SplashScreenState createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
@@ -20,8 +22,10 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     Future.delayed(Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      unawaited(UiSoundService.instance.playGameOpen());
       setState(() {
         _opacity = 1.0;
         _scale = 1.0;
@@ -33,22 +37,28 @@ class _SplashScreenState extends State<SplashScreen> {
     });
   }
 
-  void _navigateToNextPage() {
+  Future<void> _navigateToNextPage() async {
     User? user = _authService.currentUser;
-    
-    if (user != null) {
-      // User is logged in
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomePage()),
-      );
-    } else {
-      // User is not logged in, show login page
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginPage()),
-      );
-    }
+    final bool isLoggedIn = user != null;
+
+    if (!mounted) return;
+
+    // Never block the transition on audio initialization/playback.
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => isLoggedIn ? HomePage() : LoginPage(),
+      ),
+    );
+
+    unawaited(
+      (isLoggedIn
+              ? BackgroundMusicService.instance.setGameTrack()
+              : BackgroundMusicService.instance.setAuthTrack())
+          .catchError((error) {
+            debugPrint('Background music failed on splash transition: $error');
+          }),
+    );
   }
 
   @override
@@ -63,10 +73,7 @@ class _SplashScreenState extends State<SplashScreen> {
             scale: _scale,
             duration: Duration(seconds: 1),
             curve: Curves.elasticOut,
-            child: Image.asset(
-              'images/culinara_logo.png',
-              width: 200,
-            ),
+            child: Image.asset('images/culinara_logo.png', width: 200),
           ),
         ),
       ),

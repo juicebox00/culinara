@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../widgets/moving_tile_pattern.dart';
+import '../../services/background_music_service.dart';
+import '../../widgets/gingham_pattern_background.dart';
+import '../../widgets/stroked_button_label.dart';
+import '../../widgets/tap_bounce.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -16,6 +19,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _firebaseAuth = FirebaseAuth.instance;
 
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    BackgroundMusicService.instance.setAuthTrack();
+  }
 
   @override
   void dispose() {
@@ -70,7 +79,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const MovingTilePattern(),
+          const GinghamPatternBackground(),
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
@@ -144,42 +153,40 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           SizedBox(
                             width: double.infinity,
                             height: 50,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _sendResetEmail,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color.fromARGB(
-                                  255,
-                                  194,
-                                  143,
-                                  96,
+                            child: PressBounce(
+                              enabled: !_isLoading,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _sendResetEmail,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(
+                                    255,
+                                    194,
+                                    143,
+                                    96,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const StrokedButtonLabel(
+                                        'Send Reset Email',
+                                      ),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 24,
-                                      width: 24,
-                                      child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : Text(
-                                      'Send Reset Email',
-                                      style: GoogleFonts.fredoka(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          GestureDetector(
+                          TapBounce(
                             onTap: () => Navigator.pop(context),
                             child: Text(
                               'Back to Login',

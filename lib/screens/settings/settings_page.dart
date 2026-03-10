@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
-import '../../widgets/moving_tile_pattern.dart';
+import '../../services/background_music_service.dart';
+import '../../widgets/gingham_pattern_background.dart';
+import '../../widgets/stroked_button_label.dart';
+import '../../widgets/tap_bounce.dart';
 import '../auth/login_page.dart';
 import 'appearance_page.dart';
 import 'account_page.dart';
+import 'data_management_page.dart';
+import 'system_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -15,59 +20,105 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _authService = AuthService();
+  bool _isLoggingOut = false;
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFF9C2D2D) : null,
+      ),
+    );
+  }
 
   void _logout() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFF5E6D3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
-          ),
-          title: Text(
-            'Logout',
-            style: GoogleFonts.fredoka(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF5D4A3A),
-            ),
-          ),
-          content: Text(
-            'Are you sure you want to logout?',
-            style: GoogleFonts.fredoka(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF5D4A3A),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancel',
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFF5E6D3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
+              ),
+              title: Text(
+                'Logout',
                 style: GoogleFonts.fredoka(
                   fontWeight: FontWeight.bold,
                   color: const Color(0xFF5D4A3A),
                 ),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                _authService.logout();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (route) => false,
-                );
-              },
-              child: Text(
-                'Logout',
+              content: Text(
+                'Are you sure you want to logout?',
                 style: GoogleFonts.fredoka(
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF9C2D2D),
+                  color: const Color(0xFF5D4A3A),
                 ),
               ),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: _isLoggingOut
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: PressBounce(
+                    enabled: !_isLoggingOut,
+                    child: const StrokedButtonLabel(
+                      'Cancel',
+                      fillColor: Color(0xFF5D4A3A),
+                      strokeColor: Color(0xFFF5E6D3),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isLoggingOut
+                      ? null
+                      : () async {
+                          setState(() => _isLoggingOut = true);
+                          setDialogState(() {});
+                          try {
+                            await _authService.logout();
+                            await BackgroundMusicService.instance
+                                .setAuthTrack();
+                            if (!mounted || !dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            Navigator.of(this.context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => const LoginPage(),
+                              ),
+                              (route) => false,
+                            );
+                          } catch (e) {
+                            _showMessage(e.toString(), isError: true);
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isLoggingOut = false);
+                              if (dialogContext.mounted) {
+                                setDialogState(() {});
+                              }
+                            }
+                          }
+                        },
+                  child: PressBounce(
+                    enabled: !_isLoggingOut,
+                    child: _isLoggingOut
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const StrokedButtonLabel(
+                            'Logout',
+                            fillColor: Color(0xFF9C2D2D),
+                            strokeColor: Color(0xFFF5E6D3),
+                          ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -82,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const MovingTilePattern(),
+          const GinghamPatternBackground(),
           SafeArea(
             child: SingleChildScrollView(
               child: Column(
@@ -90,17 +141,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   // My Profile Section
                   Column(
                     children: [
-                      // Profile Title
-                      Text(
-                        'My Profile',
-                        style: GoogleFonts.fredoka(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D4A3A),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
                       // User Email
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -181,6 +221,20 @@ class _SettingsPageState extends State<SettingsPage> {
                         const SizedBox(height: 12),
 
                         _buildSettingsButton(
+                          icon: Icons.tune_rounded,
+                          label: 'System',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SystemPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildSettingsButton(
                           icon: Icons.palette,
                           label: 'Appearance',
                           onTap: () {
@@ -194,15 +248,15 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // About Us Button
+                        // Data Management Button
                         _buildSettingsButton(
-                          icon: Icons.info,
-                          label: 'About Us',
+                          icon: Icons.storage_rounded,
+                          label: 'Data Management',
                           onTap: () {
-                            // TODO: Navigate to About Us
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('About Us coming soon'),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const DataManagementPage(),
                               ),
                             );
                           },
@@ -236,7 +290,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onTap,
     bool isLogout = false,
   }) {
-    return GestureDetector(
+    return TapBounce(
       onTap: onTap,
       child: Container(
         width: double.infinity,
@@ -244,40 +298,17 @@ class _SettingsPageState extends State<SettingsPage> {
         decoration: BoxDecoration(
           color: Color.fromARGB(255, 194, 143, 96),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color.fromARGB(255, 93, 74, 58),
-            width: 2,
-          ),
         ),
         child: Row(
           children: [
             Icon(icon, color: Colors.white, size: 28),
             const SizedBox(width: 16),
             Expanded(
-              child: Stack(
-                children: [
-                  // Outline/stroke effect
-                  Text(
-                    label,
-                    style: GoogleFonts.fredoka(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      foreground: Paint()
-                        ..style = PaintingStyle.stroke
-                        ..strokeWidth = 1.5
-                        ..color = const Color(0xFF5D4A3A),
-                    ),
-                  ),
-                  // Main text
-                  Text(
-                    label,
-                    style: GoogleFonts.fredoka(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+              child: StrokedButtonLabel(
+                label,
+                fillColor: Colors.white,
+                strokeColor: const Color(0xFF5D4A3A),
+                fontSize: 18,
               ),
             ),
             const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),

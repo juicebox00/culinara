@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_page.dart';
-import '../../widgets/moving_tile_pattern.dart';
+import '../../widgets/gingham_pattern_background.dart';
+import '../../widgets/stroked_button_label.dart';
+import '../../widgets/tap_bounce.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -12,29 +14,51 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
+  static const Color _primaryTextColor = Color(0xFF5D4A3A);
+  static const Color _dangerTextColor = Color(0xFF9C2D2D);
+  static const Color _dialogBorderColor = Color(0xFF8B6F47);
+  static const Color _dialogBackgroundColor = Color(0xFFF5E6D3);
+
   final _authService = AuthService();
   final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  RoundedRectangleBorder _dialogShape() {
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: const BorderSide(color: _dialogBorderColor, width: 2),
+    );
+  }
+
+  Text _dialogTitle(String title, {Color? color}) {
+    return Text(
+      title,
+      style: GoogleFonts.fredoka(
+        fontWeight: FontWeight.bold,
+        color: color ?? _primaryTextColor,
+      ),
+    );
+  }
 
   InputDecoration _dialogInputDecoration(String label) {
     return InputDecoration(
       labelText: label,
       labelStyle: GoogleFonts.fredoka(
         fontWeight: FontWeight.bold,
-        color: const Color(0xFF5D4A3A),
+        color: _primaryTextColor,
       ),
       filled: true,
       fillColor: const Color(0xFFF8EFE3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF8B6F47), width: 1.5),
+        borderSide: const BorderSide(color: _dialogBorderColor, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF8B6F47), width: 1.5),
+        borderSide: const BorderSide(color: _dialogBorderColor, width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF5D4A3A), width: 2),
+        borderSide: const BorderSide(color: _primaryTextColor, width: 2),
       ),
     );
   }
@@ -60,18 +84,9 @@ class _AccountPageState extends State<AccountPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFF5E6D3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
-              ),
-              title: Text(
-                'Change Email',
-                style: GoogleFonts.fredoka(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5D4A3A),
-                ),
-              ),
+              backgroundColor: _dialogBackgroundColor,
+              shape: _dialogShape(),
+              title: _dialogTitle('Change Email'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -95,11 +110,12 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.fredoka(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D4A3A),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: const StrokedButtonLabel(
+                      'Cancel',
+                      fillColor: _primaryTextColor,
+                      strokeColor: _dialogBackgroundColor,
                     ),
                   ),
                 ),
@@ -132,7 +148,7 @@ class _AccountPageState extends State<AccountPage> {
                               currentPassword: currentPassword,
                               newEmail: newEmail,
                             );
-                            if (!mounted) return;
+                            if (!mounted || !dialogContext.mounted) return;
                             Navigator.pop(dialogContext);
                             _showMessage(
                               'Verification sent. Your email updates after you confirm the link.',
@@ -140,24 +156,25 @@ class _AccountPageState extends State<AccountPage> {
                           } catch (e) {
                             _showMessage(e.toString(), isError: true);
                           } finally {
-                            if (context.mounted) {
+                            if (mounted) {
                               setState(() => isSubmitting = false);
                             }
                           }
                         },
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          'Save',
-                          style: GoogleFonts.fredoka(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF5D4A3A),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const StrokedButtonLabel(
+                            'Save',
+                            fillColor: _primaryTextColor,
+                            strokeColor: _dialogBackgroundColor,
                           ),
-                        ),
+                  ),
                 ),
               ],
             );
@@ -182,18 +199,9 @@ class _AccountPageState extends State<AccountPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFF5E6D3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
-              ),
-              title: Text(
-                'Change Password',
-                style: GoogleFonts.fredoka(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5D4A3A),
-                ),
-              ),
+              backgroundColor: _dialogBackgroundColor,
+              shape: _dialogShape(),
+              title: _dialogTitle('Change Password'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -224,11 +232,12 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.fredoka(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D4A3A),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: const StrokedButtonLabel(
+                      'Cancel',
+                      fillColor: _primaryTextColor,
+                      strokeColor: _dialogBackgroundColor,
                     ),
                   ),
                 ),
@@ -274,30 +283,31 @@ class _AccountPageState extends State<AccountPage> {
                               currentPassword: currentPassword,
                               newPassword: newPassword,
                             );
-                            if (!mounted) return;
+                            if (!mounted || !dialogContext.mounted) return;
                             Navigator.pop(dialogContext);
                             _showMessage('Password updated successfully.');
                           } catch (e) {
                             _showMessage(e.toString(), isError: true);
                           } finally {
-                            if (context.mounted) {
+                            if (mounted) {
                               setState(() => isSubmitting = false);
                             }
                           }
                         },
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          'Save',
-                          style: GoogleFonts.fredoka(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF5D4A3A),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const StrokedButtonLabel(
+                            'Save',
+                            fillColor: _primaryTextColor,
+                            strokeColor: _dialogBackgroundColor,
                           ),
-                        ),
+                  ),
                 ),
               ],
             );
@@ -321,18 +331,9 @@ class _AccountPageState extends State<AccountPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFF5E6D3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
-              ),
-              title: Text(
-                'Delete Account',
-                style: GoogleFonts.fredoka(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF9C2D2D),
-                ),
-              ),
+              backgroundColor: _dialogBackgroundColor,
+              shape: _dialogShape(),
+              title: _dialogTitle('Delete Account', color: _dangerTextColor),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,7 +342,7 @@ class _AccountPageState extends State<AccountPage> {
                     'This action is permanent and cannot be undone.',
                     style: GoogleFonts.fredoka(
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D4A3A),
+                      color: _primaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -358,11 +359,12 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.fredoka(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D4A3A),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: const StrokedButtonLabel(
+                      'Cancel',
+                      fillColor: _primaryTextColor,
+                      strokeColor: _dialogBackgroundColor,
                     ),
                   ),
                 ),
@@ -384,9 +386,9 @@ class _AccountPageState extends State<AccountPage> {
                             await _authService.deleteAccount(
                               currentPassword: currentPassword,
                             );
-                            if (!mounted) return;
+                            if (!mounted || !dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
-                            Navigator.of(context).pushAndRemoveUntil(
+                            Navigator.of(this.context).pushAndRemoveUntil(
                               MaterialPageRoute(
                                 builder: (_) => const LoginPage(),
                               ),
@@ -395,25 +397,26 @@ class _AccountPageState extends State<AccountPage> {
                           } catch (e) {
                             _showMessage(e.toString(), isError: true);
                           } finally {
-                            if (context.mounted) {
+                            if (mounted) {
                               setState(() => isSubmitting = false);
                             }
                           }
                         },
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          'Delete',
-                          style: GoogleFonts.fredoka(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF9C2D2D),
+                  child: PressBounce(
+                    enabled: !isSubmitting,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const StrokedButtonLabel(
+                            'Delete',
+                            fillColor: _dangerTextColor,
+                            strokeColor: _dialogBackgroundColor,
                           ),
-                        ),
+                  ),
                 ),
               ],
             );
@@ -431,7 +434,7 @@ class _AccountPageState extends State<AccountPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const MovingTilePattern(),
+          const GinghamPatternBackground(),
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -440,18 +443,18 @@ class _AccountPageState extends State<AccountPage> {
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back),
-                        color: const Color(0xFF5D4A3A),
-                      ),
-                      Text(
-                        'Account Settings',
-                        style: GoogleFonts.fredoka(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      PressBounce(
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back),
                           color: const Color(0xFF5D4A3A),
                         ),
+                      ),
+                      const StrokedButtonLabel(
+                        'Account Settings',
+                        fillColor: Color(0xFF5D4A3A),
+                        strokeColor: Color(0xFFF5E6D3),
+                        fontSize: 24,
                       ),
                     ],
                   ),
@@ -505,7 +508,7 @@ class _AccountPageState extends State<AccountPage> {
         ? const Color(0xFF9C2D2D)
         : const Color.fromARGB(255, 93, 74, 58);
 
-    return GestureDetector(
+    return TapBounce(
       onTap: onTap,
       child: Container(
         width: double.infinity,
@@ -513,20 +516,17 @@ class _AccountPageState extends State<AccountPage> {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: 2),
         ),
         child: Row(
           children: [
             Icon(icon, color: Colors.white, size: 28),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
+              child: StrokedButtonLabel(
                 label,
-                style: GoogleFonts.fredoka(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+                fillColor: Colors.white,
+                strokeColor: borderColor,
+                fontSize: 18,
               ),
             ),
             const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),

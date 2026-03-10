@@ -13,33 +13,35 @@ class CulinaraSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32.0),
-          border: Border.all(color: Color(0xFF8B4513), width: 2),
-        ),
-        clipBehavior: Clip.hardEdge,
-        child: TextField(
-          onChanged: onChanged,
-          style: GoogleFonts.fredoka(
-            fontWeight: FontWeight.bold,
+    final borderRadius = BorderRadius.circular(32);
+
+    return SizedBox(
+      height: 50,
+      child: TextField(
+        onChanged: onChanged,
+        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.search),
+          hintText: hintText,
+          hintStyle: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          filled: true,
+          fillColor: const Color(0xFFFDFBF8),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16.0,
+            vertical: 12.0,
           ),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: hintText,
-            hintStyle: GoogleFonts.fredoka(
-              fontWeight: FontWeight.bold,
-            ),
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.9),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
+          border: OutlineInputBorder(
+            borderRadius: borderRadius,
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: borderRadius,
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: borderRadius,
+            borderSide: BorderSide.none,
           ),
         ),
       ),

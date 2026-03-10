@@ -5,7 +5,10 @@ import '../../services/auth_service.dart';
 import 'register_page.dart';
 import 'forgot_password_page.dart';
 import '../home/home_page.dart';
-import '../../widgets/moving_tile_pattern.dart';
+import '../../services/background_music_service.dart';
+import '../../widgets/gingham_pattern_background.dart';
+import '../../widgets/stroked_button_label.dart';
+import '../../widgets/tap_bounce.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -22,6 +25,12 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    BackgroundMusicService.instance.setAuthTrack();
+  }
 
   @override
   void dispose() {
@@ -45,6 +54,7 @@ class _LoginPageState extends State<LoginPage> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      await BackgroundMusicService.instance.setGameTrack();
 
       if (mounted) {
         Navigator.of(
@@ -77,7 +87,7 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const MovingTilePattern(),
+          const GinghamPatternBackground(),
           Form(
             key: _formKey,
             child: Center(
@@ -162,25 +172,27 @@ class _LoginPageState extends State<LoginPage> {
                               }
                               return null;
                             },
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: const Color(0xFF8B6F47),
+                            suffixIcon: PressBounce(
+                              child: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFF8B6F47),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
                             ),
                           ),
                           const SizedBox(height: 10),
                           // Forgot Password Link
                           Align(
                             alignment: Alignment.centerRight,
-                            child: GestureDetector(
+                            child: TapBounce(
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -203,38 +215,34 @@ class _LoginPageState extends State<LoginPage> {
                           SizedBox(
                             width: double.infinity,
                             height: 48,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _login,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color.fromARGB(
-                                  255,
-                                  194,
-                                  143,
-                                  96,
+                            child: PressBounce(
+                              enabled: !_isLoading,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _login,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(
+                                    255,
+                                    194,
+                                    143,
+                                    96,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const StrokedButtonLabel('Log in'),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : Text(
-                                      'Log in',
-                                      style: GoogleFonts.fredoka(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
                             ),
                           ),
                           const SizedBox(height: 12),

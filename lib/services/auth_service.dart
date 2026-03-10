@@ -8,9 +8,6 @@ class AuthService {
   // Get current user
   User? get currentUser => _firebaseAuth.currentUser;
 
-  // Stream to listen to auth state changes
-  Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
-
   // Register with email and password
   Future<UserCredential> registerWithEmail({
     required String email,
@@ -34,7 +31,6 @@ class AuthService {
         'name': name,
         'email': email.trim(),
         'createdAt': DateTime.now(),
-        'emailVerified': false,
       });
 
       return userCredential;
@@ -49,57 +45,8 @@ class AuthService {
     required String password,
   }) async {
     try {
-      UserCredential userCredential = await _firebaseAuth
+      return await _firebaseAuth
           .signInWithEmailAndPassword(email: email.trim(), password: password);
-
-      // Check if email is verified
-      await userCredential.user!.reload();
-      if (!userCredential.user!.emailVerified) {
-        // Optionally, you can force verification here
-        // await logout();
-        // throw 'Email not verified';
-      }
-
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    }
-  }
-
-  // Verify email
-  Future<void> sendEmailVerification() async {
-    try {
-      await currentUser?.sendEmailVerification();
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    }
-  }
-
-  // Check if email is verified
-  Future<bool> isEmailVerified() async {
-    try {
-      await currentUser?.reload();
-      return currentUser?.emailVerified ?? false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Resend verification email
-  Future<void> resendVerificationEmail() async {
-    try {
-      if (currentUser != null && !currentUser!.emailVerified) {
-        await currentUser!.sendEmailVerification();
-      }
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    }
-  }
-
-  // Update password
-  Future<void> updatePassword({required String newPassword}) async {
-    try {
-      await currentUser?.updatePassword(newPassword);
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     }
@@ -120,10 +67,6 @@ class AuthService {
 
       await user.reauthenticateWithCredential(credential);
       await user.verifyBeforeUpdateEmail(newEmail.trim());
-
-      await _firestore.collection('users').doc(user.uid).update({
-        'emailVerified': false,
-      });
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     }
@@ -175,30 +118,6 @@ class AuthService {
       await _firebaseAuth.signOut();
     } catch (e) {
       throw 'Failed to logout';
-    }
-  }
-
-  // Get user data from Firestore
-  Future<Map<String, dynamic>?> getUserData() async {
-    try {
-      if (currentUser == null) return null;
-      DocumentSnapshot doc = await _firestore
-          .collection('users')
-          .doc(currentUser!.uid)
-          .get();
-      return doc.data() as Map<String, dynamic>?;
-    } catch (e) {
-      throw 'Failed to get user data';
-    }
-  }
-
-  // Update user data in Firestore
-  Future<void> updateUserData({required Map<String, dynamic> data}) async {
-    try {
-      if (currentUser == null) throw 'User not authenticated';
-      await _firestore.collection('users').doc(currentUser!.uid).update(data);
-    } catch (e) {
-      throw 'Failed to update user data';
     }
   }
 

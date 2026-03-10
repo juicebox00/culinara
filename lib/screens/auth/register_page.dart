@@ -3,7 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import 'login_page.dart';
 import '../home/home_page.dart';
-import '../../widgets/moving_tile_pattern.dart';
+import '../../services/background_music_service.dart';
+import '../../widgets/gingham_pattern_background.dart';
+import '../../widgets/stroked_button_label.dart';
+import '../../widgets/tap_bounce.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -25,6 +28,14 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscureConfirmPassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    BackgroundMusicService.instance.setAuthTrack();
+  }
+
+  String get _trimmedPassword => _passwordController.text.trim();
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
@@ -44,10 +55,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       await _authService.registerWithEmail(
-        email: _emailController.text,
-        password: _passwordController.text,
-        name: _nameController.text,
+        email: _emailController.text.trim(),
+        password: _trimmedPassword,
+        name: _nameController.text.trim(),
       );
+      await BackgroundMusicService.instance.setGameTrack();
 
       if (mounted) {
         Navigator.of(
@@ -77,7 +89,7 @@ class _RegisterPageState extends State<RegisterPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          const MovingTilePattern(),
+          const GinghamPatternBackground(),
           Center(
             child: SingleChildScrollView(
               child: Column(
@@ -139,7 +151,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             hint: 'Enter your full name',
                             prefixIcon: Icons.person,
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.trim().isEmpty) {
                                 return 'Please enter your name';
                               }
                               return null;
@@ -154,10 +166,11 @@ class _RegisterPageState extends State<RegisterPage> {
                             prefixIcon: Icons.mail,
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              final email = value?.trim() ?? '';
+                              if (email.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!value.contains('@')) {
+                              if (!email.contains('@')) {
                                 return 'Please enter a valid email';
                               }
                               return null;
@@ -171,24 +184,27 @@ class _RegisterPageState extends State<RegisterPage> {
                             hint: 'Enter your password',
                             prefixIcon: Icons.lock,
                             obscureText: _obscurePassword,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: const Color(0xFF8B6F47),
+                            suffixIcon: PressBounce(
+                              child: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFF8B6F47),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              final password = value?.trim() ?? '';
+                              if (password.isEmpty) {
                                 return 'Please enter a password';
                               }
-                              if (value.length < 8) {
+                              if (password.length < 8) {
                                 return 'Password must be at least 8 characters.';
                               }
                               return null;
@@ -202,25 +218,28 @@ class _RegisterPageState extends State<RegisterPage> {
                             hint: 'Confirm your password',
                             prefixIcon: Icons.lock,
                             obscureText: _obscureConfirmPassword,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: const Color(0xFF8B6F47),
+                            suffixIcon: PressBounce(
+                              child: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFF8B6F47),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscureConfirmPassword =
+                                        !_obscureConfirmPassword;
+                                  });
+                                },
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              final confirm = value?.trim() ?? '';
+                              if (confirm.isEmpty) {
                                 return 'Please confirm your password';
                               }
-                              if (value != _passwordController.text) {
+                              if (confirm != _trimmedPassword) {
                                 return 'Passwords do not match';
                               }
                               return null;
@@ -231,38 +250,34 @@ class _RegisterPageState extends State<RegisterPage> {
                           SizedBox(
                             width: double.infinity,
                             height: 50,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _register,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color.fromARGB(
-                                  255,
-                                  194,
-                                  143,
-                                  96,
+                            child: PressBounce(
+                              enabled: !_isLoading,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _register,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(
+                                    255,
+                                    194,
+                                    143,
+                                    96,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const StrokedButtonLabel('Sign up'),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 24,
-                                      width: 24,
-                                      child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : Text(
-                                      'Sign up',
-                                      style: GoogleFonts.fredoka(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
                             ),
                           ),
                           const SizedBox(height: 5),
@@ -278,7 +293,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                     color: const Color(0xFF8B6F47),
                                   ),
                                 ),
-                                GestureDetector(
+                                TapBounce(
                                   onTap: () {
                                     Navigator.of(context).pushReplacement(
                                       MaterialPageRoute(

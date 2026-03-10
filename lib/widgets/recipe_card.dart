@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:culinara/models/recipe.dart';
+import 'package:culinara/widgets/tap_bounce.dart';
 
 class RecipeCard extends StatelessWidget {
   final Recipe recipe;
@@ -18,9 +21,9 @@ class RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ImageProvider<Object> coverImage = recipe.coverImageBytes != null
-        ? MemoryImage(recipe.coverImageBytes!)
-        : AssetImage(recipe.imagePath);
+    final hasFileCover =
+        recipe.coverImageFilePath != null &&
+        recipe.coverImageFilePath!.trim().isNotEmpty;
 
     final Widget polaroidCard = Container(
       decoration: BoxDecoration(
@@ -39,30 +42,47 @@ class RecipeCard extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image(
-                      image: coverImage,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-                  ),
-                  if (recipe.cooked)
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Image.asset(
-                        'images/cooked_stamp.png',
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                      ),
-                    ),
-                ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: hasFileCover
+                    ? Image.file(
+                        File(recipe.coverImageFilePath!),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        alignment: Alignment.center,
+                        errorBuilder: (context, error, stackTrace) =>
+                            recipe.coverImageBytes != null
+                            ? Image.memory(
+                                recipe.coverImageBytes!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                alignment: Alignment.center,
+                              )
+                            : Image.asset(
+                                recipe.imagePath,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                alignment: Alignment.center,
+                              ),
+                      )
+                    : (recipe.coverImageBytes != null
+                          ? Image.memory(
+                              recipe.coverImageBytes!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              alignment: Alignment.center,
+                            )
+                          : Image.asset(
+                              recipe.imagePath,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              alignment: Alignment.center,
+                            )),
               ),
             ),
             const SizedBox(height: 8),
@@ -107,7 +127,7 @@ class RecipeCard extends StatelessWidget {
       ),
     );
 
-    return GestureDetector(
+    return TapBounce(
       onTap: onTap,
       child: Stack(
         clipBehavior: Clip.none,
@@ -132,7 +152,8 @@ class RecipeCard extends StatelessWidget {
                 width: 28,
                 height: 28,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
               ),
             ),
         ],

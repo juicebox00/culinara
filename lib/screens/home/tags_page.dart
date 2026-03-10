@@ -1,11 +1,15 @@
+
 import 'package:culinara/models/recipe.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:culinara/widgets/stroked_button_label.dart';
+import 'package:culinara/widgets/tap_bounce.dart';
 
 class TagsPage extends StatefulWidget {
-  const TagsPage({super.key, required this.recipes});
+  const TagsPage({super.key, required this.recipes, required this.onRecipeTap});
 
   final List<Recipe> recipes;
+  final ValueChanged<Recipe> onRecipeTap;
 
   @override
   State<TagsPage> createState() => _TagsPageState();
@@ -46,6 +50,109 @@ class _TagsPageState extends State<TagsPage> {
         .toList(growable: false);
   }
 
+  List<Recipe> _recipesForTag(String tag) {
+    final needle = tag.trim().toLowerCase();
+    if (needle.isEmpty) return const <Recipe>[];
+
+    return widget.recipes
+        .where((recipe) {
+          return recipe.tags.any(
+            (rawTag) => rawTag.trim().toLowerCase() == needle,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  Future<void> _showRecipesForTag(String tag) async {
+    final taggedRecipes = _recipesForTag(tag);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFF8EFE3),
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '#$tag',
+                  style: GoogleFonts.fredoka(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF5D4A3A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${taggedRecipes.length} recipe(s)',
+                  style: GoogleFonts.fredoka(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF8B6F47),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (taggedRecipes.isEmpty)
+                  Text(
+                    'No recipes found for this tag.',
+                    style: GoogleFonts.fredoka(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D4A3A),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: taggedRecipes.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final recipe = taggedRecipes[index];
+                        return ListTile(
+                          onTap: () {
+                            Navigator.pop(context);
+                            widget.onRecipeTap(recipe);
+                          },
+                          tileColor: const Color(0xFFF5E6D3),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(
+                              color: Color(0xFF8B6F47),
+                              width: 1.5,
+                            ),
+                          ),
+                          leading: const Icon(
+                            Icons.menu_book_rounded,
+                            color: Color(0xFF5D4A3A),
+                          ),
+                          title: Text(
+                            recipe.title,
+                            style: GoogleFonts.fredoka(
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF5D4A3A),
+                            ),
+                          ),
+                          trailing: const Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Color(0xFF5D4A3A),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tags = _buildSortedTags();
@@ -56,15 +163,6 @@ class _TagsPageState extends State<TagsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Tags',
-            style: GoogleFonts.fredoka(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF5D4A3A),
-            ),
-          ),
-          const SizedBox(height: 12),
           TextField(
             controller: _searchController,
             onChanged: (_) => setState(() {}),
@@ -77,24 +175,15 @@ class _TagsPageState extends State<TagsPage> {
               fillColor: const Color(0xFFF8EFE3),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Color(0xFF8B6F47),
-                  width: 1.5,
-                ),
+                borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Color(0xFF8B6F47),
-                  width: 1.5,
-                ),
+                borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Color(0xFF5D4A3A),
-                  width: 2,
-                ),
+                borderSide: BorderSide.none,
               ),
             ),
           ),
@@ -119,34 +208,37 @@ class _TagsPageState extends State<TagsPage> {
                         const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final tag = filteredTags[index];
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color.fromARGB(255, 194, 143, 96),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color.fromARGB(255, 93, 74, 58),
-                            width: 2,
+                      final recipeCount = _recipesForTag(tag).length;
+                      return TapBounce(
+                        onTap: () => _showRecipesForTag(tag),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.tag, color: Colors.white),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '#$tag',
-                                style: GoogleFonts.fredoka(
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(255, 194, 143, 96),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.tag, color: Colors.white),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: StrokedButtonLabel(
+                                  '#$tag',
+                                  fillColor: Colors.white,
+                                  strokeColor: const Color(0xFF5D4A3A),
                                   fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
                                 ),
                               ),
-                            ),
-                          ],
+                              StrokedButtonLabel(
+                                '$recipeCount',
+                                fillColor: Colors.white,
+                                strokeColor: const Color(0xFF5D4A3A),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },

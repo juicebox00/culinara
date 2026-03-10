@@ -44,6 +44,13 @@ dependencies:
   cached_network_image: ^3.4.1
   percent_indicator: ^4.2.5
   confetti: ^0.8.0
+  shared_preferences: ^2.5.3
+  file_picker: ^10.3.2
+  path_provider: ^2.1.5
+  syncfusion_flutter_pdf: ^30.2.7
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -68,11 +75,23 @@ flutter:
   uses-material-design: true
   assets:
     - images/culinara_logo.png
-    - images/culinara_tile_pattern.png
+    - images/gingham_pattern.png
+    - images/fruits_pattern.png
+    - images/leaf_pattern.png
+    - images/oblongs_pattern.png
+    - images/diamonds_pattern.png
+    - images/stripes_pattern.png
     - images/placeholder_thumbnail.png
     - images/chef hat.png
     - images/Spoon&Fork.png
     - images/SadPlate.png
+    - sounds/auth-bg.wav
+    - sounds/game-bg.wav
+    - sounds/game-open.wav
+    - sounds/button_beep.wav
+    - sounds/timer.wav
+    - sounds/alarm.wav
+    - sounds/side_menu.wav
     
 
   # To add assets to your application, add an assets section, like this:

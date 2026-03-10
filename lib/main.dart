@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/splash/splash_screen.dart';
+import 'services/app_appearance.dart';
+import 'services/background_music_service.dart';
+import 'services/ui_sound_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,15 +14,28 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('Firebase initialized successfully');
+    debugPrint('Firebase initialized successfully');
   } catch (e) {
     if (e.toString().contains('duplicate-app')) {
-      print('Firebase already initialized (duplicate-app error)');
+      debugPrint('Firebase already initialized (duplicate-app error)');
     } else {
-      print('Firebase initialization error: $e');
+      debugPrint('Firebase initialization error: $e');
     }
   }
+
+  await AppAppearance.init();
+  await UiSoundService.instance.init();
   runApp(const Culinara());
+
+  // Start BGM after the first frame so platform channels are fully ready.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final loggedIn = FirebaseAuth.instance.currentUser != null;
+    if (loggedIn) {
+      await BackgroundMusicService.instance.setGameTrack();
+    } else {
+      await BackgroundMusicService.instance.setAuthTrack();
+    }
+  });
 }
 
 class Culinara extends StatelessWidget {
@@ -27,6 +44,17 @@ class Culinara extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      builder: (context, child) {
+        // Apply bottom system inset app-wide so controls remain tappable.
+        return SafeArea(
+          top: false,
+          left: false,
+          right: false,
+          bottom: true,
+          maintainBottomViewPadding: true,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       debugShowCheckedModeBanner: false,
       title: 'Culinara',
       theme: ThemeData(
