@@ -35,6 +35,14 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String get _trimmedPassword => _passwordController.text.trim();
 
+  // Email validation using regex pattern
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -83,10 +91,34 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _authService.signInWithGoogle();
+      await BackgroundMusicService.instance.setGameTrack();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: Stack(
         children: [
           const GinghamPatternBackground(),
@@ -170,8 +202,8 @@ class _RegisterPageState extends State<RegisterPage> {
                               if (email.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!email.contains('@')) {
-                                return 'Please enter a valid email';
+                              if (!_isValidEmail(email)) {
+                                return 'Please enter a valid email address';
                               }
                               return null;
                             },
@@ -281,6 +313,47 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                           const SizedBox(height: 5),
+                          // Google Sign In Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: PressBounce(
+                              enabled: !_isLoading,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _signInWithGoogle,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: const BorderSide(
+                                      color: Color.fromARGB(255, 194, 143, 96),
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.g_mobiledata,
+                                      color: Color(0xFF4285F4),
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Sign up with Google',
+                                      style: GoogleFonts.fredoka(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF5D4A3A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
                           // Login Link
                           Center(
                             child: Row(
@@ -357,7 +430,8 @@ class _RegisterPageState extends State<RegisterPage> {
             hintText: hint,
             hintStyle: GoogleFonts.fredoka(
               fontSize: 14,
-              color: const Color(0xFF8B6F47),
+              color: const Color(0xFFC07737),
+              fontWeight: FontWeight.w600,
             ),
             prefixIcon: Icon(prefixIcon, color: const Color(0xFF8B6F47)),
             suffixIcon: suffixIcon,

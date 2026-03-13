@@ -61,7 +61,7 @@ class RecipeCard extends StatelessWidget {
                                 alignment: Alignment.center,
                               )
                             : Image.asset(
-                                recipe.imagePath,
+                                (recipe.imagePath.isNotEmpty ? recipe.imagePath : 'images/default_recipe.jpg'),
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
@@ -77,7 +77,7 @@ class RecipeCard extends StatelessWidget {
                               alignment: Alignment.center,
                             )
                           : Image.asset(
-                              recipe.imagePath,
+                              (recipe.imagePath.isNotEmpty ? recipe.imagePath : 'images/default_recipe.jpg'),
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,

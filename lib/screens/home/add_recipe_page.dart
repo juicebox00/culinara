@@ -10,7 +10,9 @@ import 'package:culinara/services/ui_sound_service.dart';
 import 'package:culinara/widgets/gingham_pattern_background.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
 import 'package:culinara/widgets/tap_bounce.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -26,12 +28,20 @@ class AddRecipePage extends StatefulWidget {
 
 class _AddRecipePageState extends State<AddRecipePage> {
   static final RegExp _timerTokenRegex = RegExp(r'\s*\[\[t=(\d+)\]\]\s*$');
+  static const List<String> _servingSizeUnits = [
+    'Servings',
+    'Bowls',
+    'Cups',
+    'Pieces',
+    'Portions',
+  ];
 
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _ingredientsController = TextEditingController();
   final _directionsController = TextEditingController();
   final _servingSizeController = TextEditingController();
+  final _servingSizeNumberController = TextEditingController();
   final _cookingTimeController = TextEditingController();
   final _tagsController = TextEditingController();
 
@@ -42,6 +52,10 @@ class _AddRecipePageState extends State<AddRecipePage> {
   bool _showStepValidationErrors = false;
   Timer? _autosaveDebounce;
   String? _editingRecipeId;
+  String _selectedServingUnit = 'Servings';
+  int _cookingHours = 0;
+  int _cookingMinutes = 0;
+  int _cookingSeconds = 0;
   final List<TextEditingController> _ingredientStepControllers = [];
   final List<TextEditingController> _directionStepControllers = [];
   final List<int?> _directionStepDurations = [];
@@ -73,8 +87,8 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController.text = base.title;
       _ingredientsController.text = base.ingredients;
       _directionsController.text = base.directions;
-      _servingSizeController.text = base.servingSize;
-      _cookingTimeController.text = base.cookingTime;
+      _parseServingSize(base.servingSize);
+      _parseCookingTime(base.cookingTime);
       _tagsController.text = base.tags.join(', ');
       _coverImagePath = base.coverImageFilePath;
       _legacyCoverImageBytes = base.coverImageBytes;
@@ -86,8 +100,7 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController,
       _ingredientsController,
       _directionsController,
-      _servingSizeController,
-      _cookingTimeController,
+      _servingSizeNumberController,
       _tagsController,
     ]) {
       controller.addListener(_onDraftInputChanged);
@@ -98,6 +111,56 @@ class _AddRecipePageState extends State<AddRecipePage> {
     });
   }
 
+  void _parseServingSize(String servingSize) {
+    if (servingSize.isEmpty) {
+      _servingSizeNumberController.text = '';
+      _selectedServingUnit = 'Servings';
+      return;
+    }
+
+    // Try to parse "number unit" format
+    final parts = servingSize.trim().split(RegExp(r'\s+'));
+    if (parts.isNotEmpty && int.tryParse(parts[0]) != null) {
+      _servingSizeNumberController.text = parts[0];
+      if (parts.length > 1) {
+        final unit = parts.sublist(1).join(' ');
+        if (_servingSizeUnits.contains(unit)) {
+          _selectedServingUnit = unit;
+        } else {
+          _selectedServingUnit = 'Servings';
+        }
+      }
+    } else {
+      _servingSizeNumberController.text = servingSize;
+      _selectedServingUnit = 'Servings';
+    }
+  }
+
+  void _parseCookingTime(String cookingTime) {
+    if (cookingTime.isEmpty) {
+      _cookingHours = 0;
+      _cookingMinutes = 0;
+      _cookingSeconds = 0;
+      return;
+    }
+
+    // Parse "HH:MM:SS" or similar formats
+    final parts = cookingTime.split(':');
+    if (parts.length >= 1) {
+      _cookingHours = int.tryParse(parts[0]) ?? 0;
+    }
+    if (parts.length >= 2) {
+      _cookingMinutes = int.tryParse(parts[1]) ?? 0;
+    }
+    if (parts.length >= 3) {
+      _cookingSeconds = int.tryParse(parts[2]) ?? 0;
+    }
+  }
+
+  String _buildCookingTime() {
+    return '${_cookingHours.toString().padLeft(2, '0')}:${_cookingMinutes.toString().padLeft(2, '0')}:${_cookingSeconds.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
     _autosaveDebounce?.cancel();
@@ -106,7 +169,7 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController,
       _ingredientsController,
       _directionsController,
-      _servingSizeController,
+      _servingSizeNumberController,
       _cookingTimeController,
       _tagsController,
     ]) {
@@ -116,7 +179,7 @@ class _AddRecipePageState extends State<AddRecipePage> {
     _titleController.dispose();
     _ingredientsController.dispose();
     _directionsController.dispose();
-    _servingSizeController.dispose();
+    _servingSizeNumberController.dispose();
     _cookingTimeController.dispose();
     _tagsController.dispose();
     _disposeStepControllers(_ingredientStepControllers);
@@ -270,102 +333,196 @@ class _AddRecipePageState extends State<AddRecipePage> {
   }
 
   Future<int?> _showTimerPickerDialog({int? existingSeconds}) async {
-    final initialMinutes = (existingSeconds ?? 0) ~/ 60;
-    final initialSeconds = (existingSeconds ?? 0) % 60;
-    final minutesController = TextEditingController(
-      text: initialMinutes == 0 ? '' : initialMinutes.toString(),
-    );
-    final secondsController = TextEditingController(
-      text: initialSeconds == 0 ? '' : initialSeconds.toString(),
-    );
+    int selectedHours = (existingSeconds ?? 0) ~/ 3600;
+    int selectedMinutes = ((existingSeconds ?? 0) % 3600) ~/ 60;
+    int selectedSeconds = (existingSeconds ?? 0) % 60;
 
     final result = await showDialog<int>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFF5E6D3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
-          ),
-          title: Text(
-            'Set Step Timer',
-            style: GoogleFonts.fredoka(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF5D4A3A),
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: const Color(0xFFF5E6D3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
             ),
-          ),
-          content: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: minutesController,
-                  keyboardType: TextInputType.number,
-                  style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                  decoration: _inputDecoration(
-                    'Min',
-                  ).copyWith(filled: true, fillColor: Colors.white),
+            title: Text(
+              'Set Step Timer',
+              style: GoogleFonts.fredoka(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF5D4A3A),
+              ),
+            ),
+            content: SizedBox(
+              width: 300,
+              height: 200,
+              child: Row(
+                children: [
+                  // Hours Picker
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Hours',
+                          style: GoogleFonts.fredoka(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF5D4A3A),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: selectedHours,
+                            ),
+                            itemExtent: 40,
+                            onSelectedItemChanged: (value) {
+                              setDialogState(() => selectedHours = value);
+                            },
+                            children: List.generate(
+                              100,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF5D4A3A),
+                                    fontSize: 24,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Minutes Picker
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Minutes',
+                          style: GoogleFonts.fredoka(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF5D4A3A),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: selectedMinutes,
+                            ),
+                            itemExtent: 40,
+                            onSelectedItemChanged: (value) {
+                              setDialogState(() => selectedMinutes = value);
+                            },
+                            children: List.generate(
+                              60,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF5D4A3A),
+                                    fontSize: 24,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Seconds Picker
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Seconds',
+                          style: GoogleFonts.fredoka(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF5D4A3A),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: selectedSeconds,
+                            ),
+                            itemExtent: 40,
+                            onSelectedItemChanged: (value) {
+                              setDialogState(() => selectedSeconds = value);
+                            },
+                            children: List.generate(
+                              60,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF5D4A3A),
+                                    fontSize: 24,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  UiSoundService.instance.playButtonBeep();
+                  Navigator.pop(context);
+                },
+                child: const StrokedButtonLabel(
+                  'Cancel',
+                  fillColor: Color(0xFF5D4A3A),
+                  strokeColor: Color(0xFFF5E6D3),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: secondsController,
-                  keyboardType: TextInputType.number,
-                  style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                  decoration: _inputDecoration(
-                    'Sec',
-                  ).copyWith(filled: true, fillColor: Colors.white),
+              TextButton(
+                onPressed: () {
+                  UiSoundService.instance.playButtonBeep();
+                  Navigator.pop(context, 0);
+                },
+                child: const StrokedButtonLabel(
+                  'Clear',
+                  fillColor: Color(0xFF8B6F47),
+                  strokeColor: Color(0xFFF5E6D3),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  UiSoundService.instance.playButtonBeep();
+                  final totalSeconds =
+                      selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds;
+                  Navigator.pop(context, totalSeconds);
+                },
+                child: const StrokedButtonLabel(
+                  'Save',
+                  fillColor: Color(0xFF5D4A3A),
+                  strokeColor: Color(0xFFF5E6D3),
                 ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                UiSoundService.instance.playButtonBeep();
-                Navigator.pop(context);
-              },
-              child: const StrokedButtonLabel(
-                'Cancel',
-                fillColor: Color(0xFF5D4A3A),
-                strokeColor: Color(0xFFF5E6D3),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                UiSoundService.instance.playButtonBeep();
-                Navigator.pop(context, 0);
-              },
-              child: const StrokedButtonLabel(
-                'Clear',
-                fillColor: Color(0xFF8B6F47),
-                strokeColor: Color(0xFFF5E6D3),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                UiSoundService.instance.playButtonBeep();
-                final minutes =
-                    int.tryParse(minutesController.text.trim()) ?? 0;
-                final seconds =
-                    int.tryParse(secondsController.text.trim()) ?? 0;
-                final totalSeconds = (minutes * 60) + seconds;
-                Navigator.pop(context, totalSeconds);
-              },
-              child: const StrokedButtonLabel(
-                'Save',
-                fillColor: Color(0xFF5D4A3A),
-                strokeColor: Color(0xFFF5E6D3),
-              ),
-            ),
-          ],
         );
       },
     );
-
-    minutesController.dispose();
-    secondsController.dispose();
 
     if (result == null) return null;
     if (result <= 0) return 0;
@@ -500,19 +657,25 @@ class _AddRecipePageState extends State<AddRecipePage> {
         (_editingRecipeId = DateTime.now().millisecondsSinceEpoch.toString());
   }
 
+  String _buildServingSize() {
+    final number = _servingSizeNumberController.text.trim();
+    if (number.isEmpty) return '';
+    return '$number $_selectedServingUnit';
+  }
+
   Recipe _buildDraftRecipe() {
     _syncStepTextToControllers();
     final base = _baseRecipe;
     return Recipe(
       id: _editingRecipeId ?? base?.id ?? 'draft',
       title: _titleController.text.trim(),
-      imagePath: base?.imagePath ?? 'images/placeholder_thumbnail.png',
+      imagePath: base?.imagePath ?? 'images/default_recipe.jpg',
       coverImageFilePath: _coverImagePath,
       coverImageBytes: _legacyCoverImageBytes,
       ingredients: _ingredientsController.text.trim(),
       directions: _directionsController.text.trim(),
-      servingSize: _servingSizeController.text.trim(),
-      cookingTime: _cookingTimeController.text.trim(),
+      servingSize: _buildServingSize(),
+      cookingTime: _buildCookingTime(),
       tags: _parseTags(_tagsController.text),
       cookedImageGalleryPaths: base?.cookedImageGalleryPaths ?? const [],
       cookedImageGalleryBytes: base?.cookedImageGalleryBytes ?? const [],
@@ -607,13 +770,13 @@ class _AddRecipePageState extends State<AddRecipePage> {
           base?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
-      imagePath: base?.imagePath ?? 'images/placeholder_thumbnail.png',
+      imagePath: base?.imagePath ?? 'images/default_recipe.jpg',
       coverImageFilePath: _coverImagePath,
       coverImageBytes: _legacyCoverImageBytes,
       ingredients: _ingredientsController.text.trim(),
       directions: _directionsController.text.trim(),
-      servingSize: _servingSizeController.text.trim(),
-      cookingTime: _cookingTimeController.text.trim(),
+      servingSize: _buildServingSize(),
+      cookingTime: _buildCookingTime(),
       tags: _parseTags(_tagsController.text),
       cookedImageGalleryPaths: base?.cookedImageGalleryPaths ?? const [],
       cookedImageGalleryBytes: base?.cookedImageGalleryBytes ?? const [],
@@ -935,20 +1098,162 @@ class _AddRecipePageState extends State<AddRecipePage> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _servingSizeController,
-                        decoration: _inputDecoration(
-                          'Serving Size (e.g. 4 servings)',
-                        ),
-                        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextFormField(
+                              controller: _servingSizeNumberController,
+                              decoration: _inputDecoration('Number'),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 3,
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedServingUnit,
+                              decoration: _inputDecoration('Unit'),
+                              items: _servingSizeUnits.map((unit) {
+                                return DropdownMenuItem(
+                                  value: unit,
+                                  child: Text(
+                                    unit,
+                                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedServingUnit = value;
+                                  });
+                                  _onDraftInputChanged();
+                                }
+                              },
+                              style: GoogleFonts.fredoka(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF5D4A3A),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _cookingTimeController,
-                        decoration: _inputDecoration(
-                          'Cooking Time (e.g. 30 mins)',
+                      Text(
+                        'Cooking Time',
+                        style: GoogleFonts.fredoka(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D4A3A),
                         ),
-                        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              height: 150,
+                              child: CupertinoPicker(
+                                magnification: 1.2,
+                                squeeze: 1.2,
+                                scrollController: FixedExtentScrollController(initialItem: _cookingHours),
+                                onSelectedItemChanged: (int value) {
+                                  setState(() {
+                                    _cookingHours = value;
+                                    _onDraftInputChanged();
+                                  });
+                                },
+                                itemExtent: 50.0,
+                                children: List<Widget>.generate(24, (int index) {
+                                  return Center(
+                                    child: Text(
+                                      '${index.toString().padLeft(2, '0')}h',
+                                      style: GoogleFonts.fredoka(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: const Color(0xFF5D4A3A),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              height: 150,
+                              child: CupertinoPicker(
+                                magnification: 1.2,
+                                squeeze: 1.2,
+                                scrollController: FixedExtentScrollController(initialItem: _cookingMinutes),
+                                onSelectedItemChanged: (int value) {
+                                  setState(() {
+                                    _cookingMinutes = value;
+                                    _onDraftInputChanged();
+                                  });
+                                },
+                                itemExtent: 50.0,
+                                children: List<Widget>.generate(60, (int index) {
+                                  return Center(
+                                    child: Text(
+                                      '${index.toString().padLeft(2, '0')}m',
+                                      style: GoogleFonts.fredoka(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: const Color(0xFF5D4A3A),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              height: 150,
+                              child: CupertinoPicker(
+                                magnification: 1.2,
+                                squeeze: 1.2,
+                                scrollController: FixedExtentScrollController(initialItem: _cookingSeconds),
+                                onSelectedItemChanged: (int value) {
+                                  setState(() {
+                                    _cookingSeconds = value;
+                                    _onDraftInputChanged();
+                                  });
+                                },
+                                itemExtent: 50.0,
+                                children: List<Widget>.generate(60, (int index) {
+                                  return Center(
+                                    child: Text(
+                                      '${index.toString().padLeft(2, '0')}s',
+                                      style: GoogleFonts.fredoka(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: const Color(0xFF5D4A3A),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextFormField(

@@ -30,6 +30,7 @@ class _HomePageState extends State<HomePage> {
 
   int _selectedIndex = 0;
   String _searchQuery = '';
+  String _sortOrder = 'A to Z'; // Default sort order
 
   List<Recipe> recipes = [];
   bool _isLoadingRecipes = true;
@@ -40,36 +41,12 @@ class _HomePageState extends State<HomePage> {
     _loadRecipes();
   }
 
-  List<Recipe> _defaultRecipes() {
-    return [
-      Recipe(
-        id: '1',
-        title: 'Pork Sinigang',
-        imagePath: 'images/placeholder_thumbnail.png',
-        isPinned: false,
-        ingredients:
-            '1 kg pork ribs\n8 cups water\n2 tomatoes\n1 onion\n2 tbsp fish sauce\n1 packet sinigang mix\n1 radish\n1 eggplant\n1 bunch kangkong',
-        directions:
-            '1. Boil pork ribs until tender.\n2. Add onion and tomatoes, simmer for 10 minutes.\n3. Stir in fish sauce and sinigang mix.\n4. Add radish and eggplant; cook until tender.\n5. Add kangkong and serve hot.',
-        servingSize: '4 servings',
-        cookingTime: '1 hr 10 mins',
-        tags: ['filipino', 'soup', 'comfort food'],
-      ),
-    ];
-  }
-
   Future<void> _loadRecipes() async {
     final storedRecipes = await RecipeStoreService.loadRecipes();
-    final hasStored = storedRecipes.isNotEmpty;
-    final loaded = hasStored ? storedRecipes : _defaultRecipes();
-
-    if (!hasStored) {
-      await RecipeStoreService.saveRecipes(loaded);
-    }
 
     if (!mounted) return;
     setState(() {
-      recipes = loaded;
+      recipes = storedRecipes;
       _isLoadingRecipes = false;
     });
   }
@@ -215,6 +192,58 @@ class _HomePageState extends State<HomePage> {
         .toList(growable: false);
   }
 
+  List<Recipe> _sortRecipes(List<Recipe> source) {
+    final sorted = List<Recipe>.from(source);
+    switch (_sortOrder) {
+      case 'A to Z':
+        sorted.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case 'Newest to Oldest':
+        sorted.sort((a, b) => b.id.compareTo(a.id));
+        break;
+      case 'Oldest to Newest':
+        sorted.sort((a, b) => a.id.compareTo(b.id));
+        break;
+    }
+    return sorted;
+  }
+
+  void _showSortMenu() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Sort By',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildSortOption('A to Z'),
+            _buildSortOption('Newest to Oldest'),
+            _buildSortOption('Oldest to Newest'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOption(String option) {
+    return ListTile(
+      title: Text(
+        option,
+        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+      ),
+      trailing: _sortOrder == option ? const Icon(Icons.check) : null,
+      onTap: () {
+        setState(() {
+          _sortOrder = option;
+        });
+        Navigator.pop(context);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleRecipes = _filteredRecipesByQuery(recipes);
@@ -254,6 +283,15 @@ class _HomePageState extends State<HomePage> {
                               _searchQuery = value;
                             });
                           },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TapBounce(
+                        onTap: _showSortMenu,
+                        child: const Icon(
+                          Icons.sort,
+                          size: 28,
+                          color: Color(0xFF5D4A3A),
                         ),
                       ),
                     ],
@@ -327,7 +365,7 @@ class _HomePageState extends State<HomePage> {
                           physics: NeverScrollableScrollPhysics(),
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
-                          children: unpinnedRecipes.map((recipe) {
+                          children: _sortRecipes(unpinnedRecipes).map((recipe) {
                             return RecipeCard(
                               recipe: recipe,
                               isPinned: false,

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:culinara/models/recipe.dart';
 import 'package:culinara/screens/home/add_recipe_page.dart';
@@ -926,9 +927,15 @@ class _CookModePageState extends State<_CookModePage> {
   Future<void> _startRunningSfx() async {
     try {
       await _runningSfxPlayer.setReleaseMode(ReleaseMode.loop);
+      await _runningSfxPlayer.setVolume(0.5); // Set volume to 50%
       await _runningSfxPlayer.stop();
+      debugPrint('Attempting to play timer sound');
+      
+      // AssetSource automatically looks in assets/ folder
       await _runningSfxPlayer.play(AssetSource('sounds/timer.wav'));
-    } catch (_) {
+      debugPrint('Timer sound started successfully');
+    } catch (e) {
+      debugPrint('Error playing timer sound: $e');
       // SFX should not interrupt cook mode.
     }
   }
@@ -936,16 +943,28 @@ class _CookModePageState extends State<_CookModePage> {
   Future<void> _stopRunningSfx() async {
     try {
       await _runningSfxPlayer.stop();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error stopping timer sound: $e');
       // Best effort cleanup.
     }
   }
 
   Future<void> _playTimerDoneSfx() async {
     try {
+      await _alarmSfxPlayer.setReleaseMode(ReleaseMode.stop);
+      await _alarmSfxPlayer.setVolume(0.8); // Set alarm volume to 80%
       await _alarmSfxPlayer.stop();
+      
+      // Add extra delay to ensure stop completes
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      debugPrint('Attempting to play alarm sound');
+      
+      // AssetSource automatically looks in assets/ folder
       await _alarmSfxPlayer.play(AssetSource('sounds/alarm.wav'));
-    } catch (_) {
+      debugPrint('Alarm sound played successfully');
+    } catch (e) {
+      debugPrint('Error playing alarm sound: $e');
       // SFX should not interrupt cook mode.
     }
   }
@@ -1009,20 +1028,28 @@ class _CookModePageState extends State<_CookModePage> {
 
       if (_remainingSeconds <= 1) {
         timer.cancel();
+        _stopRunningSfx();
         setState(() {
           _remainingSeconds = 0;
           _isTimerRunning = false;
         });
-        _stopRunningSfx();
+        
+        // Play alarm sound immediately, don't wait for context
         _playTimerDoneSfx();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Step ${_stepIndex + 1} timer finished.',
-              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-            ),
-          ),
-        );
+        
+        // Show snackbar after a brief delay to ensure state is updated
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Step ${_stepIndex + 1} timer finished.',
+                  style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                ),
+              ),
+            );
+          }
+        });
         return;
       }
 
@@ -1048,6 +1075,8 @@ class _CookModePageState extends State<_CookModePage> {
       _remainingSeconds = _selectedSeconds;
     });
   }
+
+
 
   void _goNext() {
     _handleNext();

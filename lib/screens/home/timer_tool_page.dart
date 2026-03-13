@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
 import 'package:culinara/widgets/tap_bounce.dart';
@@ -26,27 +27,45 @@ class _TimerToolPageState extends State<TimerToolPage> {
   Future<void> _startRunningSfx() async {
     try {
       await _runningSfxPlayer.setReleaseMode(ReleaseMode.loop);
+      await _runningSfxPlayer.setVolume(0.5); // Set volume to 50%
       await _runningSfxPlayer.stop();
+      debugPrint('Attempting to play timer sound');
+      
+      // AssetSource automatically looks in assets/ folder
       await _runningSfxPlayer.play(AssetSource('sounds/timer.wav'));
-    } catch (_) {
-      // Running SFX should never break timer behavior.
+      debugPrint('Timer sound started successfully');
+    } catch (e) {
+      debugPrint('Error playing timer sound: $e');
+      // SFX should never break timer behavior.
     }
   }
 
   Future<void> _stopRunningSfx() async {
     try {
       await _runningSfxPlayer.stop();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error stopping timer sound: $e');
       // Best effort cleanup.
     }
   }
 
   Future<void> _playTimerDoneSfx() async {
     try {
+      await _alarmSfxPlayer.setReleaseMode(ReleaseMode.stop);
+      await _alarmSfxPlayer.setVolume(0.8); // Set alarm volume to 80%
       await _alarmSfxPlayer.stop();
+      
+      // Add extra delay to ensure stop completes
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      debugPrint('Attempting to play alarm sound');
+      
+      // AssetSource automatically looks in assets/ folder
       await _alarmSfxPlayer.play(AssetSource('sounds/alarm.wav'));
-    } catch (_) {
-      // SFX should never break timer behavior.
+      debugPrint('Alarm sound played successfully');
+    } catch (e) {
+      debugPrint('Error playing alarm sound: $e');
+      // SFX should not interrupt timer.
     }
   }
 
@@ -59,9 +78,13 @@ class _TimerToolPageState extends State<TimerToolPage> {
   }
 
   String _formatTime(int seconds) {
-    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
-    final secs = (seconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$secs';
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
   void _setQuickTime(int seconds) {
@@ -89,22 +112,29 @@ class _TimerToolPageState extends State<TimerToolPage> {
 
       if (_remainingSeconds <= 1) {
         timer.cancel();
+        _stopRunningSfx();
+        
         setState(() {
           _remainingSeconds = 0;
           _isRunning = false;
         });
 
-        _stopRunningSfx();
+        // Play alarm sound immediately, don't wait for context
         _playTimerDoneSfx();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Timer finished.',
-              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-            ),
-          ),
-        );
+        // Show snackbar after a brief delay to ensure state is updated
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Timer finished.',
+                  style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                ),
+              ),
+            );
+          }
+        });
         return;
       }
 
@@ -129,6 +159,197 @@ class _TimerToolPageState extends State<TimerToolPage> {
       _isRunning = false;
       _remainingSeconds = _selectedSeconds;
     });
+  }
+
+  Future<void> _showCustomTimePickerDialog() async {
+    int selectedHours = 0;
+    int selectedMinutes = 0;
+    int selectedSeconds = 0;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFFF5E6D3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
+          ),
+          title: Text(
+            'Set Custom Time',
+            style: GoogleFonts.fredoka(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF5D4A3A),
+            ),
+          ),
+          content: SizedBox(
+            width: 300,
+            height: 200,
+            child: Row(
+              children: [
+                // Hours Picker
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Hours',
+                        style: GoogleFonts.fredoka(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D4A3A),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: CupertinoPicker(
+                          scrollController:
+                              FixedExtentScrollController(initialItem: 0),
+                          itemExtent: 40,
+                          onSelectedItemChanged: (index) {
+                            setDialogState(() {
+                              selectedHours = index;
+                            });
+                          },
+                          children: List<Widget>.generate(
+                            100,
+                            (index) => Center(
+                              child: Text(
+                                index.toString().padLeft(2, '0'),
+                                style: GoogleFonts.fredoka(
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF5D4A3A),
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Minutes Picker
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Minutes',
+                        style: GoogleFonts.fredoka(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D4A3A),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: CupertinoPicker(
+                          scrollController:
+                              FixedExtentScrollController(initialItem: 0),
+                          itemExtent: 40,
+                          onSelectedItemChanged: (index) {
+                            setDialogState(() {
+                              selectedMinutes = index;
+                            });
+                          },
+                          children: List<Widget>.generate(
+                            60,
+                            (index) => Center(
+                              child: Text(
+                                index.toString().padLeft(2, '0'),
+                                style: GoogleFonts.fredoka(
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF5D4A3A),
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Seconds Picker
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Seconds',
+                        style: GoogleFonts.fredoka(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D4A3A),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: CupertinoPicker(
+                          scrollController:
+                              FixedExtentScrollController(initialItem: 0),
+                          itemExtent: 40,
+                          onSelectedItemChanged: (index) {
+                            setDialogState(() {
+                              selectedSeconds = index;
+                            });
+                          },
+                          children: List<Widget>.generate(
+                            60,
+                            (index) => Center(
+                              child: Text(
+                                index.toString().padLeft(2, '0'),
+                                style: GoogleFonts.fredoka(
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF5D4A3A),
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                final totalSeconds =
+                    selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds;
+
+                if (totalSeconds > 0) {
+                  setState(() {
+                    _selectedSeconds = totalSeconds;
+                    _remainingSeconds = totalSeconds;
+                  });
+                }
+
+                Navigator.pop(context);
+              },
+              child: Text(
+                'Set',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF8B5E3C),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -202,6 +423,22 @@ class _TimerToolPageState extends State<TimerToolPage> {
                   onTap: () => _setQuickTime(10 * 60),
                   enabled: !_isRunning,
                 ),
+                PressBounce(
+                  enabled: !_isRunning,
+                  child: ElevatedButton(
+                    onPressed: !_isRunning ? () => _showCustomTimePickerDialog() : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B5E3C),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: const StrokedButtonLabel(
+                      'Custom',
+                      fillColor: Colors.white,
+                      strokeColor: Color(0xFF8B5E3C),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -224,18 +461,18 @@ class _TimerToolPageState extends State<TimerToolPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: PressBounce(
-                    child: OutlinedButton.icon(
+                    child: ElevatedButton.icon(
                       onPressed: _resetTimer,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF5D4A3A),
-                        side: BorderSide.none,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B6F47),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       icon: const Icon(Icons.restart_alt),
                       label: const StrokedButtonLabel(
                         'Reset',
-                        fillColor: Color(0xFF5D4A3A),
-                        strokeColor: Color(0xFFF8EFE3),
+                        fillColor: Colors.white,
+                        strokeColor: Color(0xFF8B6F47),
                       ),
                     ),
                   ),
