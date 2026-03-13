@@ -81,10 +81,34 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _authService.signInWithGoogle();
+      await BackgroundMusicService.instance.setGameTrack();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: Stack(
         children: [
           const GinghamPatternBackground(),
@@ -242,6 +266,47 @@ class _LoginPageState extends State<LoginPage> {
                                         ),
                                       )
                                     : const StrokedButtonLabel('Log in'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Google Sign In Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: PressBounce(
+                              enabled: !_isLoading,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _signInWithGoogle,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: const BorderSide(
+                                      color: Color(0xFFC28F60),
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.g_mobiledata,
+                                      color: Color(0xFF4285F4),
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Sign in with Google',
+                                      style: GoogleFonts.fredoka(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF5D4A3A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

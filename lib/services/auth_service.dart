@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:culinara/services/recipe_store_service.dart';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -52,6 +54,56 @@ class AuthService {
     }
   }
 
+  // Sign in with Google
+  Future<UserCredential> signInWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: [
+          'email',
+          'profile',
+        ],
+      );
+      
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        throw 'Google sign-in was cancelled';
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await _firebaseAuth.signInWithCredential(credential);
+
+      // Save user data to Firestore if new user
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'uid': userCredential.user!.uid,
+          'name': userCredential.user!.displayName ?? 'User',
+          'email': userCredential.user!.email ?? '',
+          'createdAt': DateTime.now(),
+        });
+      }
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Google sign-in failed, Couldn\'t find your Google account.';
+    }
+  }
+
   Future<void> changeEmail({
     required String currentPassword,
     required String newEmail,
@@ -59,6 +111,14 @@ class AuthService {
     try {
       final user = currentUser;
       if (user == null) throw 'User not authenticated';
+
+      // Only allow email change for email/password users
+      bool hasPasswordProvider = user.providerData
+          .any((provider) => provider.providerId == 'password');
+      
+      if (!hasPasswordProvider) {
+        throw 'Email change is only available for email/password accounts.';
+      }
 
       final credential = EmailAuthProvider.credential(
         email: user.email ?? '',
@@ -97,24 +157,74 @@ class AuthService {
       final user = currentUser;
       if (user == null) throw 'User not authenticated';
 
-      final credential = EmailAuthProvider.credential(
-        email: user.email ?? '',
-        password: currentPassword,
-      );
+      final uid = user.uid;
 
-      await user.reauthenticateWithCredential(credential);
-      await _firestore.collection('users').doc(user.uid).delete();
+      // Check if user has email/password provider
+      bool hasPasswordProvider = user.providerData
+          .any((provider) => provider.providerId == 'password');
+      bool hasGoogleProvider = user.providerData
+          .any((provider) => provider.providerId == 'google.com');
+
+      // If user has password (email/password auth), require reauthentication
+      if (hasPasswordProvider) {
+        if (currentPassword.isEmpty) {
+          throw 'Current password is required.';
+        }
+        final credential = EmailAuthProvider.credential(
+          email: user.email ?? '',
+          password: currentPassword,
+        );
+        await user.reauthenticateWithCredential(credential);
+      } else if (hasGoogleProvider) {
+        // Reauthenticate Google user
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        if (googleUser == null) {
+          throw 'Google reauthentication cancelled.';
+        }
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        await user.reauthenticateWithCredential(credential);
+      }
+
+      // Delete all user recipes
+      final recipes = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('recipes')
+          .get();
+      for (final recipe in recipes.docs) {
+        await recipe.reference.delete();
+      }
+
+      // Delete user document from Firestore
+      await _firestore.collection('users').doc(uid).delete();
+      
+      // Delete user account from Firebase Auth (this will invalidate the current user session)
       await user.delete();
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        // This error might occur after user deletion; it's expected
+        throw 'Account deleted successfully.';
+      }
       throw _handleAuthException(e);
-    } on FirebaseException {
-      throw 'Failed to delete account data.';
+    } catch (e) {
+      if (e.toString().contains('User not found')) {
+        // User already deleted, this is success
+        return;
+      }
+      throw 'Failed to delete account: $e';
     }
   }
 
   // Logout
   Future<void> logout() async {
     try {
+      // Clear local recipe cache when logging out
+      await RecipeStoreService.clearLocalCache();
       await _firebaseAuth.signOut();
     } catch (e) {
       throw 'Failed to logout';

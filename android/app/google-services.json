@@ -12,7 +12,20 @@
           "package_name": "com.example.culinara"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "640935250132-io4ctv6uai0cr65a1kjmp7o494blgbvj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.culinara",
+            "certificate_hash": "f70407b4579dcdf43a094e44e2fb54b3521aa096"
+          }
+        },
+        {
+          "client_id": "640935250132-tn1nipdd740ho417kcp5el3nipi03nev.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB7c3Ee5ZL_OcUciv2Tu5JqnW3ORKhToAw"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "640935250132-tn1nipdd740ho417kcp5el3nipi03nev.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

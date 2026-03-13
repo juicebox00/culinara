@@ -14,6 +14,23 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
+    // Persistent controllers for dialogs
+    final TextEditingController _changeEmailController = TextEditingController();
+    final TextEditingController _changeEmailPasswordController = TextEditingController();
+    final TextEditingController _changePasswordCurrentController = TextEditingController();
+    final TextEditingController _changePasswordNewController = TextEditingController();
+    final TextEditingController _changePasswordConfirmController = TextEditingController();
+    final TextEditingController _deleteAccountPasswordController = TextEditingController();
+    @override
+    void dispose() {
+      _changeEmailController.dispose();
+      _changeEmailPasswordController.dispose();
+      _changePasswordCurrentController.dispose();
+      _changePasswordNewController.dispose();
+      _changePasswordConfirmController.dispose();
+      _deleteAccountPasswordController.dispose();
+      super.dispose();
+    }
   static const Color _primaryTextColor = Color(0xFF5D4A3A);
   static const Color _dangerTextColor = Color(0xFF9C2D2D);
   static const Color _dialogBorderColor = Color(0xFF8B6F47);
@@ -21,6 +38,20 @@ class _AccountPageState extends State<AccountPage> {
 
   final _authService = AuthService();
   final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  // Check if user has a password (email/password auth, not Google sign-in)
+  bool _userHasPassword() {
+    final user = _authService.currentUser;
+    if (user == null) return false;
+    
+    // Check if user has email/password provider
+    for (var provider in user.providerData) {
+      if (provider.providerId == 'password') {
+        return true;
+      }
+    }
+    return false;
+  }
 
   RoundedRectangleBorder _dialogShape() {
     return RoundedRectangleBorder(
@@ -42,22 +73,17 @@ class _AccountPageState extends State<AccountPage> {
   InputDecoration _dialogInputDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: GoogleFonts.fredoka(
+      labelStyle: const TextStyle(
+        fontFamily: 'Fredoka',
         fontWeight: FontWeight.bold,
         color: _primaryTextColor,
       ),
       filled: true,
       fillColor: const Color(0xFFF8EFE3),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+      enabledBorder: UnderlineInputBorder(
         borderSide: const BorderSide(color: _dialogBorderColor, width: 1.5),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _dialogBorderColor, width: 1.5),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+      focusedBorder: UnderlineInputBorder(
         borderSide: const BorderSide(color: _primaryTextColor, width: 2),
       ),
     );
@@ -74,12 +100,11 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _showChangeEmailDialog() async {
-    final newEmailController = TextEditingController();
-    final passwordController = TextEditingController();
     bool isSubmitting = false;
 
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -91,16 +116,24 @@ class _AccountPageState extends State<AccountPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
-                    controller: newEmailController,
+                    controller: _changeEmailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontFamily: 'Fredoka',
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
                     decoration: _dialogInputDecoration('New email'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
-                    controller: passwordController,
+                    controller: _changeEmailPasswordController,
                     obscureText: true,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontFamily: 'Fredoka',
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
                     decoration: _dialogInputDecoration('Current password'),
                   ),
                 ],
@@ -110,21 +143,18 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: const StrokedButtonLabel(
-                      'Cancel',
-                      fillColor: _primaryTextColor,
-                      strokeColor: _dialogBackgroundColor,
-                    ),
+                  child: const StrokedButtonLabel(
+                    'Cancel',
+                    fillColor: _primaryTextColor,
+                    strokeColor: _dialogBackgroundColor,
                   ),
                 ),
                 TextButton(
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          final newEmail = newEmailController.text.trim();
-                          final currentPassword = passwordController.text;
+                          final newEmail = _changeEmailController.text.trim();
+                          final currentPassword = _changeEmailPasswordController.text;
 
                           if (!_emailRegex.hasMatch(newEmail)) {
                             _showMessage(
@@ -161,20 +191,17 @@ class _AccountPageState extends State<AccountPage> {
                             }
                           }
                         },
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const StrokedButtonLabel(
-                            'Save',
-                            fillColor: _primaryTextColor,
-                            strokeColor: _dialogBackgroundColor,
-                          ),
-                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const StrokedButtonLabel(
+                          'Save',
+                          fillColor: _primaryTextColor,
+                          strokeColor: _dialogBackgroundColor,
+                        ),
                 ),
               ],
             );
@@ -182,48 +209,67 @@ class _AccountPageState extends State<AccountPage> {
         );
       },
     );
-
-    newEmailController.dispose();
-    passwordController.dispose();
   }
 
   Future<void> _showChangePasswordDialog() async {
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
     bool isSubmitting = false;
+    bool hasPassword = _userHasPassword();
+    final dialogTitle = hasPassword ? 'Change Password' : 'Set Password';
 
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
               backgroundColor: _dialogBackgroundColor,
               shape: _dialogShape(),
-              title: _dialogTitle('Change Password'),
+              title: _dialogTitle(dialogTitle),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Only show "Current password" field if user has a password
+                  if (hasPassword)
+                    Column(
+                      children: [
+                        TextField(
+                          controller: _changePasswordCurrentController,
+                          obscureText: true,
+                          style: const TextStyle(
+                            fontFamily: 'Fredoka',
+                            fontWeight: FontWeight.bold,
+                            color: _primaryTextColor,
+                          ),
+                          decoration: _dialogInputDecoration('Current password'),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
                   TextField(
-                    controller: currentPasswordController,
+                    controller: _changePasswordNewController,
                     obscureText: true,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                    decoration: _dialogInputDecoration('Current password'),
+                    style: const TextStyle(
+                      fontFamily: 'Fredoka',
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
+                    decoration: _dialogInputDecoration(
+                      hasPassword ? 'New password' : 'Password',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
-                    controller: newPasswordController,
+                    controller: _changePasswordConfirmController,
                     obscureText: true,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                    decoration: _dialogInputDecoration('New password'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: confirmPasswordController,
-                    obscureText: true,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                    decoration: _dialogInputDecoration('Confirm new password'),
+                    style: const TextStyle(
+                      fontFamily: 'Fredoka',
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
+                    decoration: _dialogInputDecoration(
+                      hasPassword ? 'Confirm new password' : 'Confirm password',
+                    ),
                   ),
                 ],
               ),
@@ -232,28 +278,30 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: const StrokedButtonLabel(
-                      'Cancel',
-                      fillColor: _primaryTextColor,
-                      strokeColor: _dialogBackgroundColor,
-                    ),
+                  child: const StrokedButtonLabel(
+                    'Cancel',
+                    fillColor: _primaryTextColor,
+                    strokeColor: _dialogBackgroundColor,
                   ),
                 ),
                 TextButton(
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          final currentPassword =
-                              currentPasswordController.text;
-                          final newPassword = newPasswordController.text;
-                          final confirmPassword =
-                              confirmPasswordController.text;
+                          final newPassword = _changePasswordNewController.text;
+                          final confirmPassword = _changePasswordConfirmController.text;
+                          final currentPassword = _changePasswordCurrentController.text;
 
-                          if (currentPassword.isEmpty ||
-                              newPassword.isEmpty ||
-                              confirmPassword.isEmpty) {
+                          // For "Change Password" - require current password
+                          if (hasPassword && currentPassword.isEmpty) {
+                            _showMessage(
+                              'Please enter your current password.',
+                              isError: true,
+                            );
+                            return;
+                          }
+
+                          if (newPassword.isEmpty || confirmPassword.isEmpty) {
                             _showMessage(
                               'Please complete all fields.',
                               isError: true,
@@ -271,7 +319,7 @@ class _AccountPageState extends State<AccountPage> {
 
                           if (newPassword != confirmPassword) {
                             _showMessage(
-                              'New password and confirmation do not match.',
+                              'Password does not match confirmation.',
                               isError: true,
                             );
                             return;
@@ -280,12 +328,19 @@ class _AccountPageState extends State<AccountPage> {
                           setState(() => isSubmitting = true);
                           try {
                             await _authService.changePassword(
-                              currentPassword: currentPassword,
+                              currentPassword: hasPassword ? currentPassword : '',
                               newPassword: newPassword,
                             );
                             if (!mounted || !dialogContext.mounted) return;
                             Navigator.pop(dialogContext);
-                            _showMessage('Password updated successfully.');
+                            final message = hasPassword
+                                ? 'Password updated successfully.'
+                                : 'Password set successfully.';
+                            _showMessage(message);
+                            // Clear controllers
+                            _changePasswordCurrentController.clear();
+                            _changePasswordNewController.clear();
+                            _changePasswordConfirmController.clear();
                           } catch (e) {
                             _showMessage(e.toString(), isError: true);
                           } finally {
@@ -294,20 +349,17 @@ class _AccountPageState extends State<AccountPage> {
                             }
                           }
                         },
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const StrokedButtonLabel(
-                            'Save',
-                            fillColor: _primaryTextColor,
-                            strokeColor: _dialogBackgroundColor,
-                          ),
-                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : StrokedButtonLabel(
+                          hasPassword ? 'Save' : 'Set Password',
+                          fillColor: _primaryTextColor,
+                          strokeColor: _dialogBackgroundColor,
+                        ),
                 ),
               ],
             );
@@ -315,18 +367,15 @@ class _AccountPageState extends State<AccountPage> {
         );
       },
     );
-
-    currentPasswordController.dispose();
-    newPasswordController.dispose();
-    confirmPasswordController.dispose();
   }
 
   Future<void> _showDeleteAccountDialog() async {
-    final passwordController = TextEditingController();
     bool isSubmitting = false;
+    bool hasPassword = _userHasPassword();
 
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -339,19 +388,28 @@ class _AccountPageState extends State<AccountPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'This action is permanent and cannot be undone.',
+                    hasPassword
+                        ? 'This action is permanent and cannot be undone.'
+                        : 'Are you sure you want to delete your account? This action cannot be undone.',
                     style: GoogleFonts.fredoka(
                       fontWeight: FontWeight.bold,
                       color: _primaryTextColor,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
-                    decoration: _dialogInputDecoration('Current password'),
-                  ),
+                  // Only show password field for email/password users
+                  if (hasPassword) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _deleteAccountPasswordController,
+                      obscureText: true,
+                      style: const TextStyle(
+                        fontFamily: 'Fredoka',
+                        fontWeight: FontWeight.bold,
+                        color: _primaryTextColor,
+                      ),
+                      decoration: _dialogInputDecoration('Current password'),
+                    ),
+                  ],
                 ],
               ),
               actions: [
@@ -359,35 +417,52 @@ class _AccountPageState extends State<AccountPage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext),
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: const StrokedButtonLabel(
-                      'Cancel',
-                      fillColor: _primaryTextColor,
-                      strokeColor: _dialogBackgroundColor,
-                    ),
+                  child: StrokedButtonLabel(
+                    hasPassword ? 'Cancel' : 'No',
+                    fillColor: _primaryTextColor,
+                    strokeColor: _dialogBackgroundColor,
                   ),
                 ),
                 TextButton(
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          final currentPassword = passwordController.text;
-                          if (currentPassword.isEmpty) {
-                            _showMessage(
-                              'Current password is required.',
-                              isError: true,
-                            );
-                            return;
-                          }
-
                           setState(() => isSubmitting = true);
+                          
                           try {
+                            // Prepare password (empty for Google users)
+                            final password = hasPassword 
+                                ? _deleteAccountPasswordController.text 
+                                : '';
+                            
+                            if (hasPassword && password.isEmpty) {
+                              _showMessage(
+                                'Current password is required.',
+                                isError: true,
+                              );
+                              setState(() => isSubmitting = false);
+                              return;
+                            }
+
+                            // Delete account
                             await _authService.deleteAccount(
-                              currentPassword: currentPassword,
+                              currentPassword: password,
                             );
+                            
                             if (!mounted || !dialogContext.mounted) return;
+                            
+                            // Show success message before navigation
+                            _showMessage('Account deleted successfully.');
+                            
+                            // Wait a moment for Firebase to complete deletion and UI to update
+                            await Future.delayed(const Duration(milliseconds: 800));
+                            
+                            if (!mounted) return;
+                            
+                            // Close dialog
                             Navigator.of(dialogContext).pop();
+                            
+                            // Navigate to login page
                             Navigator.of(this.context).pushAndRemoveUntil(
                               MaterialPageRoute(
                                 builder: (_) => const LoginPage(),
@@ -395,7 +470,9 @@ class _AccountPageState extends State<AccountPage> {
                               (route) => false,
                             );
                           } catch (e) {
-                            _showMessage(e.toString(), isError: true);
+                            if (mounted) {
+                              _showMessage(e.toString(), isError: true);
+                            }
                           } finally {
                             if (mounted) {
                               setState(() => isSubmitting = false);
@@ -403,20 +480,17 @@ class _AccountPageState extends State<AccountPage> {
                           }
                         },
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: PressBounce(
-                    enabled: !isSubmitting,
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const StrokedButtonLabel(
-                            'Delete',
-                            fillColor: _dangerTextColor,
-                            strokeColor: _dialogBackgroundColor,
-                          ),
-                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : StrokedButtonLabel(
+                          hasPassword ? 'Delete' : 'Yes',
+                          fillColor: _dangerTextColor,
+                          strokeColor: _dialogBackgroundColor,
+                        ),
                 ),
               ],
             );
@@ -424,8 +498,6 @@ class _AccountPageState extends State<AccountPage> {
         );
       },
     );
-
-    passwordController.dispose();
   }
 
   @override
@@ -459,18 +531,25 @@ class _AccountPageState extends State<AccountPage> {
                     ],
                   ),
                   const SizedBox(height: 28),
-                  _buildActionButton(
-                    icon: Icons.alternate_email,
-                    label: 'Change Email',
-                    onTap: _showChangeEmailDialog,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionButton(
-                    icon: Icons.lock,
-                    label: 'Change Password',
-                    onTap: _showChangePasswordDialog,
-                  ),
-                  const SizedBox(height: 36),
+                  // Only show "Change Email" for email/password users
+                  if (_userHasPassword()) ...[
+                    _buildActionButton(
+                      icon: Icons.alternate_email,
+                      label: 'Change Email',
+                      onTap: _showChangeEmailDialog,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Show "Change Password" only if user has password (email/password auth)
+                  if (_userHasPassword()) ...[
+                    _buildActionButton(
+                      icon: Icons.lock,
+                      label: 'Change Password',
+                      onTap: _showChangePasswordDialog,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const SizedBox(height: 24),
                   Text(
                     'Danger Zone',
                     style: GoogleFonts.fredoka(
