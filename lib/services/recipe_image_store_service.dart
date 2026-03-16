@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -133,5 +134,63 @@ class RecipeImageStoreService {
   static String _sanitize(String input) {
     final cleaned = input.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     return cleaned.isEmpty ? 'item' : cleaned;
+  }
+
+  /// Uploads the cover image for a recipe to Firebase Storage.
+  /// Returns the download URL, or null if the upload fails.
+  static Future<String?> uploadCoverImage({
+    required String localFilePath,
+    required String userId,
+    required String recipeId,
+  }) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) return null;
+      final ref = FirebaseStorage.instance
+          .ref('users/$userId/recipes/$recipeId/cover.jpg');
+      await ref.putFile(file);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('Error uploading cover image: $e');
+      return null;
+    }
+  }
+
+  /// Uploads a gallery image at the given index to Firebase Storage.
+  /// Returns the download URL, or null if the upload fails.
+  static Future<String?> uploadGalleryImage({
+    required String localFilePath,
+    required String userId,
+    required String recipeId,
+    required int index,
+  }) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) return null;
+      final ref = FirebaseStorage.instance
+          .ref('users/$userId/recipes/$recipeId/gallery_$index.jpg');
+      await ref.putFile(file);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('Error uploading gallery image $index: $e');
+      return null;
+    }
+  }
+
+  /// Downloads an image from Firebase Storage and saves it locally.
+  /// Returns the local file path, or null if the download fails.
+  static Future<String?> downloadFromStorage({
+    required String url,
+    required String recipeId,
+    required String slot,
+  }) async {
+    try {
+      final bytes = await FirebaseStorage.instance.refFromURL(url).getData();
+      if (bytes == null) return null;
+      return await saveBytesImage(bytes: bytes, recipeId: recipeId, slot: slot);
+    } catch (e) {
+      print('Error downloading image from storage: $e');
+      return null;
+    }
   }
 }

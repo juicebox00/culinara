@@ -3,19 +3,20 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:culinara/models/recipe.dart';
 import 'package:culinara/screens/home/add_recipe_page.dart';
 import 'package:culinara/services/recipe_image_store_service.dart';
 import 'package:culinara/services/recipe_pdf_service.dart';
 import 'package:culinara/services/ui_sound_service.dart';
+import 'package:culinara/services/background_music_service.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
 import 'package:culinara/widgets/tap_bounce.dart';
 import 'package:image_picker/image_picker.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
+  final List<String> availableShelves;
   final Function(Recipe) onPin;
   final Function(Recipe) onDelete;
   final Function(Recipe) onUpdate;
@@ -23,6 +24,7 @@ class RecipeDetailPage extends StatefulWidget {
   const RecipeDetailPage({
     super.key,
     required this.recipe,
+    this.availableShelves = const [],
     required this.onPin,
     required this.onDelete,
     required this.onUpdate,
@@ -34,7 +36,14 @@ class RecipeDetailPage extends StatefulWidget {
 
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
   static const int _maxCookedPhotos = 10;
-  static final RegExp _timerTokenRegex = RegExp(r'\s*\[\[t=(\d+)\]\]\s*$');
+  // Legacy seconds-only timer token: [[t=90]]
+  static final RegExp _timerTokenSecondsRegex = RegExp(
+    r'\s*\[\[t=(\d+)\]\]\s*$',
+  );
+  // New MM:SS timer token matching AddRecipePage: [[t=05:30]]
+  static final RegExp _timerTokenMmSsRegex = RegExp(
+    r'\s*\[\[t=(\d+):(\d{2})\]\]\s*$',
+  );
   static final RegExp _inlineTimeRegex = RegExp(
     r'(\d+)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\b',
     caseSensitive: false,
@@ -59,11 +68,28 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     final rawSteps = _splitSteps(rawDirections);
     return rawSteps
         .map((step) {
-          final tokenMatch = _timerTokenRegex.firstMatch(step);
-          final tokenSeconds = tokenMatch == null
-              ? null
-              : int.tryParse(tokenMatch.group(1) ?? '');
-          final cleanedStep = step.replaceFirst(_timerTokenRegex, '').trim();
+          int? tokenSeconds;
+          String cleanedStep = step.trim();
+
+          // Prefer new [[t=MM:SS]] format
+          final mmSsMatch = _timerTokenMmSsRegex.firstMatch(step);
+          if (mmSsMatch != null) {
+            final mm = int.tryParse(mmSsMatch.group(1) ?? '');
+            final ss = int.tryParse(mmSsMatch.group(2) ?? '');
+            if (mm != null && ss != null) {
+              tokenSeconds = (mm * 60) + ss;
+            }
+            cleanedStep = step.replaceFirst(_timerTokenMmSsRegex, '').trim();
+          } else {
+            // Fallback to legacy [[t=90]] seconds-only format
+            final secondsMatch = _timerTokenSecondsRegex.firstMatch(step);
+            if (secondsMatch != null) {
+              tokenSeconds = int.tryParse(secondsMatch.group(1) ?? '');
+              cleanedStep = step
+                  .replaceFirst(_timerTokenSecondsRegex, '')
+                  .trim();
+            }
+          }
           final fallbackSeconds = _extractInlineDurationSeconds(cleanedStep);
           final seconds = tokenSeconds != null && tokenSeconds > 0
               ? tokenSeconds
@@ -187,7 +213,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Future<void> _editRecipe() async {
     final updated = await Navigator.push<Recipe>(
       context,
-      MaterialPageRoute(builder: (_) => AddRecipePage(editingRecipe: recipe)),
+      MaterialPageRoute(
+        builder: (_) => AddRecipePage(
+          editingRecipe: recipe,
+          suggestedShelves: widget.availableShelves,
+        ),
+      ),
     );
 
     if (updated == null || !mounted) return;
@@ -771,6 +802,25 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   _buildDetailSection('Directions', _directionsForDisplay()),
                   const SizedBox(height: 10),
                   _buildDetailSection(
+                    'Source',
+                    recipe.sourceUrl.isEmpty
+                        ? 'No source added'
+                        : recipe.sourceUrl,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
+                    'Notes',
+                    recipe.notes.isEmpty ? 'No notes added' : recipe.notes,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
+                    'Shelves',
+                    recipe.shelves.isEmpty
+                        ? 'No shelves added'
+                        : recipe.shelves.join(', '),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailSection(
                     'Serving Size',
                     recipe.servingSize.isEmpty
                         ? 'Not specified'
@@ -844,17 +894,16 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: PressBounce(
-                          child: ElevatedButton.icon(
-                            onPressed: _deleteRecipe,
-                            icon: Icon(Icons.delete),
-                            label: const StrokedButtonLabel('Delete'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
+                      PressBounce(
+                        child: ElevatedButton(
+                          onPressed: _deleteRecipe,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(52, 48),
+                            padding: EdgeInsets.zero,
                           ),
+                          child: const Icon(Icons.delete),
                         ),
                       ),
                     ],
@@ -901,6 +950,19 @@ class _CookModePage extends StatefulWidget {
 }
 
 class _CookModePageState extends State<_CookModePage> {
+  // Cook mode timers should not take audio focus from background music.
+  static final AudioContext _sfxContext = AudioContext(
+    android: const AudioContextAndroid(
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.game,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playback,
+      options: {AVAudioSessionOptions.mixWithOthers},
+    ),
+  );
+
   Timer? _timer;
   final AudioPlayer _runningSfxPlayer = AudioPlayer();
   final AudioPlayer _alarmSfxPlayer = AudioPlayer();
@@ -908,6 +970,7 @@ class _CookModePageState extends State<_CookModePage> {
   int _selectedSeconds = 0;
   int _remainingSeconds = 0;
   bool _isTimerRunning = false;
+  bool _isAlarmRinging = false;
   bool _allowExitWithoutPrompt = false;
 
   @override
@@ -919,6 +982,7 @@ class _CookModePageState extends State<_CookModePage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _stopTimerDoneAlarm();
     _runningSfxPlayer.dispose();
     _alarmSfxPlayer.dispose();
     super.dispose();
@@ -930,9 +994,13 @@ class _CookModePageState extends State<_CookModePage> {
       await _runningSfxPlayer.setVolume(0.5); // Set volume to 50%
       await _runningSfxPlayer.stop();
       debugPrint('Attempting to play timer sound');
-      
+
       // AssetSource automatically looks in assets/ folder
-      await _runningSfxPlayer.play(AssetSource('sounds/timer.wav'));
+      await _runningSfxPlayer.play(
+        AssetSource('sounds/timer.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
       debugPrint('Timer sound started successfully');
     } catch (e) {
       debugPrint('Error playing timer sound: $e');
@@ -951,22 +1019,41 @@ class _CookModePageState extends State<_CookModePage> {
 
   Future<void> _playTimerDoneSfx() async {
     try {
-      await _alarmSfxPlayer.setReleaseMode(ReleaseMode.stop);
+      _isAlarmRinging = true;
+      await _alarmSfxPlayer.setReleaseMode(ReleaseMode.loop);
       await _alarmSfxPlayer.setVolume(0.8); // Set alarm volume to 80%
       await _alarmSfxPlayer.stop();
-      
+
       // Add extra delay to ensure stop completes
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       debugPrint('Attempting to play alarm sound');
-      
+
       // AssetSource automatically looks in assets/ folder
-      await _alarmSfxPlayer.play(AssetSource('sounds/alarm.wav'));
+      await _alarmSfxPlayer.play(
+        AssetSource('sounds/alarm.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
       debugPrint('Alarm sound played successfully');
     } catch (e) {
       debugPrint('Error playing alarm sound: $e');
+      // Ensure music does not stay paused if alarm fails.
+      BackgroundMusicService.instance.resumeAfterTimer();
+      _isAlarmRinging = false;
       // SFX should not interrupt cook mode.
     }
+  }
+
+  Future<void> _stopTimerDoneAlarm() async {
+    if (!_isAlarmRinging) return;
+    try {
+      await _alarmSfxPlayer.stop();
+    } catch (_) {
+      // Best effort cleanup.
+    }
+    _isAlarmRinging = false;
+    BackgroundMusicService.instance.resumeAfterTimer();
   }
 
   bool get _isLastStep => _stepIndex >= widget.directionSteps.length - 1;
@@ -987,12 +1074,13 @@ class _CookModePageState extends State<_CookModePage> {
   void _syncTimerForCurrentStep({bool notify = true}) {
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
     final seconds = widget.directionSteps[_stepIndex].durationSeconds ?? 0;
-    final update = () {
+    void update() {
       _isTimerRunning = false;
       _selectedSeconds = seconds;
       _remainingSeconds = seconds;
-    };
+    }
 
     if (notify) {
       setState(update);
@@ -1017,6 +1105,7 @@ class _CookModePageState extends State<_CookModePage> {
     setState(() {
       _isTimerRunning = true;
     });
+    BackgroundMusicService.instance.pauseForTimer();
     _startRunningSfx();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -1033,18 +1122,26 @@ class _CookModePageState extends State<_CookModePage> {
           _remainingSeconds = 0;
           _isTimerRunning = false;
         });
-        
+
         // Play alarm sound immediately, don't wait for context
         _playTimerDoneSfx();
-        
-        // Show snackbar after a brief delay to ensure state is updated
+
+        // Show snackbar with explicit stop action for looping alarm
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
                   'Step ${_stepIndex + 1} timer finished.',
                   style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                ),
+                duration: const Duration(days: 1),
+                action: SnackBarAction(
+                  label: 'Stop',
+                  onPressed: () {
+                    _stopTimerDoneAlarm();
+                  },
                 ),
               ),
             );
@@ -1062,6 +1159,8 @@ class _CookModePageState extends State<_CookModePage> {
   void _pauseTimer() {
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _isTimerRunning = false;
     });
@@ -1070,13 +1169,13 @@ class _CookModePageState extends State<_CookModePage> {
   void _resetTimer() {
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _isTimerRunning = false;
       _remainingSeconds = _selectedSeconds;
     });
   }
-
-
 
   void _goNext() {
     _handleNext();
@@ -1093,6 +1192,8 @@ class _CookModePageState extends State<_CookModePage> {
 
       _timer?.cancel();
       _stopRunningSfx();
+      _stopTimerDoneAlarm();
+      BackgroundMusicService.instance.resumeAfterTimer();
       _allowExitWithoutPrompt = true;
       Navigator.pop(context, true);
       return;
@@ -1103,6 +1204,8 @@ class _CookModePageState extends State<_CookModePage> {
 
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _stepIndex += 1;
       _isTimerRunning = false;
@@ -1118,6 +1221,8 @@ class _CookModePageState extends State<_CookModePage> {
 
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _stepIndex -= 1;
       _isTimerRunning = false;
@@ -1309,6 +1414,8 @@ class _CookModePageState extends State<_CookModePage> {
     if (shouldLeave == true) {
       _timer?.cancel();
       _stopRunningSfx();
+      _stopTimerDoneAlarm();
+      BackgroundMusicService.instance.resumeAfterTimer();
       _isTimerRunning = false;
       return true;
     }

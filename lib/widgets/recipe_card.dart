@@ -9,14 +9,22 @@ class RecipeCard extends StatelessWidget {
   final Recipe recipe;
   final bool isPinned;
   final Function(Recipe) onPin;
+  final Function(Recipe) onDuplicate;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelectionMode;
+  final bool isSelected;
 
   const RecipeCard({
     super.key,
     required this.recipe,
     required this.isPinned,
     required this.onPin,
+    required this.onDuplicate,
     required this.onTap,
+    this.onLongPress,
+    this.isSelectionMode = false,
+    this.isSelected = false,
   });
 
   @override
@@ -61,7 +69,9 @@ class RecipeCard extends StatelessWidget {
                                 alignment: Alignment.center,
                               )
                             : Image.asset(
-                                (recipe.imagePath.isNotEmpty ? recipe.imagePath : 'images/default_recipe.jpg'),
+                                (recipe.imagePath.isNotEmpty
+                                    ? recipe.imagePath
+                                    : 'images/default_recipe.jpg'),
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
@@ -77,7 +87,9 @@ class RecipeCard extends StatelessWidget {
                               alignment: Alignment.center,
                             )
                           : Image.asset(
-                              (recipe.imagePath.isNotEmpty ? recipe.imagePath : 'images/default_recipe.jpg'),
+                              (recipe.imagePath.isNotEmpty
+                                  ? recipe.imagePath
+                                  : 'images/default_recipe.jpg'),
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
@@ -96,30 +108,82 @@ class RecipeCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                PopupMenuButton<String>(
-                  onSelected: (_) => onPin(recipe),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'toggle_pin',
-                      child: Row(
-                        children: [
-                          Icon(
-                            isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 18,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            isPinned ? 'Unpin' : 'Pin',
-                            style: GoogleFonts.fredoka(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                if (isSelectionMode)
+                  Icon(
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 20,
+                    color: isSelected
+                        ? const Color(0xFF8B6F47)
+                        : const Color(0xFFB9A089),
+                  )
+                else
+                  PopupMenuButton<String>(
+                    color: const Color(0xFFF8EFE3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(
+                        color: Color(0xFF8B6F47),
+                        width: 1.5,
                       ),
                     ),
-                  ],
-                  child: const Icon(Icons.more_vert, size: 18),
-                ),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'toggle_pin':
+                          onPin(recipe);
+                          break;
+                        case 'duplicate':
+                          onDuplicate(recipe);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'toggle_pin',
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPinned
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined,
+                              size: 18,
+                              color: const Color(0xFF5D4A3A),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isPinned ? 'Unpin' : 'Pin',
+                              style: GoogleFonts.fredoka(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF5D4A3A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'duplicate',
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.copy_rounded,
+                              size: 18,
+                              color: Color(0xFF5D4A3A),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Duplicate',
+                              style: GoogleFonts.fredoka(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF5D4A3A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: const Icon(Icons.more_vert, size: 18),
+                  ),
               ],
             ),
           ],
@@ -129,6 +193,7 @@ class RecipeCard extends StatelessWidget {
 
     return TapBounce(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -154,6 +219,17 @@ class RecipeCard extends StatelessWidget {
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) =>
                     const SizedBox.shrink(),
+              ),
+            ),
+          if (isSelected)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0x338B6F47),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
               ),
             ),
         ],

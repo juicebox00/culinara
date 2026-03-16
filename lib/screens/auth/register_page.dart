@@ -35,7 +35,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String get _trimmedPassword => _passwordController.text.trim();
 
-  // Email validation using regex pattern
+  // Email validation
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(
       r'^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
@@ -128,7 +128,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Culinara Logo outside form
+                  // Culinara Logo
                   Image.asset('images/culinara_logo.png', height: 90),
                   const SizedBox(height: 18),
                   // Form Card
@@ -394,7 +394,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-        ], // end of Stack children
+        ],
       ),
     );
   }

@@ -10,7 +10,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
   BackgroundMusicService._();
 
   // Temporary safety switch while troubleshooting background music assets.
-  static const bool _playbackDisabled = true;
+  static const bool _playbackDisabled = false;
 
   static final BackgroundMusicService instance = BackgroundMusicService._();
 
@@ -22,6 +22,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
   double _volume = 0.35;
   AppMusicTrack _currentTrack = AppMusicTrack.game;
   bool _isInitialized = false;
+  int _timerPauseDepth = 0;
 
   bool get isEnabled => _isEnabled;
   double get volume => _volume;
@@ -49,6 +50,8 @@ class BackgroundMusicService with WidgetsBindingObserver {
     if (!_isInitialized) {
       await init();
     }
+    // If the requested track is already playing, don't restart it.
+    if (_currentTrack == track) return;
 
     _currentTrack = track;
     if (_isEnabled && !_playbackDisabled) {
@@ -95,9 +98,9 @@ class BackgroundMusicService with WidgetsBindingObserver {
   String _assetForTrack(AppMusicTrack track) {
     switch (track) {
       case AppMusicTrack.auth:
-        return 'sounds/auth-bg.wav';
+        return 'sounds/auth-bg.mp3';
       case AppMusicTrack.game:
-        return 'sounds/game-bg.wav';
+        return 'sounds/game-bg.mp3';
     }
   }
 
@@ -105,9 +108,49 @@ class BackgroundMusicService with WidgetsBindingObserver {
     if (_playbackDisabled) return;
 
     try {
+      // Always stop any existing playback before starting the new track
+      await _player.stop();
       await _player.play(AssetSource(_assetForTrack(_currentTrack)));
     } catch (error) {
       debugPrint('Failed to play background music: $error');
+    }
+  }
+
+  /// Temporarily pause background music while a timer is running.
+  /// This does not change the user's music setting.
+  Future<void> pauseForTimer() async {
+    if (!_isInitialized) {
+      await init();
+    }
+    if (!_isEnabled || _playbackDisabled) return;
+
+    _timerPauseDepth++;
+    if (_timerPauseDepth == 1) {
+      try {
+        await _player.pause();
+      } catch (error) {
+        debugPrint('Failed to pause background music for timer: $error');
+      }
+    }
+  }
+
+  /// Resume background music after a timer (and its alarm) has finished.
+  /// Safe to call multiple times; music only resumes when all timers are done.
+  Future<void> resumeAfterTimer() async {
+    if (!_isInitialized) {
+      await init();
+    }
+    if (_timerPauseDepth <= 0) return;
+
+    _timerPauseDepth--;
+    if (_timerPauseDepth == 0 && _isEnabled && !_playbackDisabled) {
+      try {
+        await _player.resume();
+      } catch (error) {
+        // If resume fails (e.g. app was restarted), fall back to replaying.
+        debugPrint('Failed to resume music after timer, replaying: $error');
+        await _playCurrentTrack();
+      }
     }
   }
 
@@ -123,6 +166,8 @@ class BackgroundMusicService with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.resumed) {
+      // If a timer has paused music, don't auto-restart it here.
+      if (_timerPauseDepth > 0) return;
       unawaited(_playCurrentTrack());
     }
   }

@@ -7,6 +7,22 @@ class UiSoundService {
   static final UiSoundService instance = UiSoundService._();
   static const String _sfxEnabledPrefKey = 'sfx_enabled';
 
+  // Use a context that never grabs audio focus, so it won't
+  // pause/stop background music when short UI sounds play.
+  static final AudioContext _sfxContext = AudioContext(
+    android: const AudioContextAndroid(
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.game,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      // Match background music category so sounds are always audible,
+      // but still allow mixing with other audio.
+      category: AVAudioSessionCategory.playback,
+      options: {AVAudioSessionOptions.mixWithOthers},
+    ),
+  );
+
   final AudioPlayer _buttonPlayer = AudioPlayer();
   final AudioPlayer _menuPlayer = AudioPlayer();
   final AudioPlayer _gameOpenPlayer = AudioPlayer();
@@ -40,7 +56,11 @@ class UiSoundService {
 
     try {
       await _buttonPlayer.stop();
-      await _buttonPlayer.play(AssetSource('sounds/button_beep.wav'));
+      await _buttonPlayer.play(
+        AssetSource('sounds/button_beep.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
     } catch (_) {
       // UI sound should not interrupt interactions.
     }
@@ -54,7 +74,11 @@ class UiSoundService {
 
     try {
       await _menuPlayer.stop();
-      await _menuPlayer.play(AssetSource('sounds/side_menu.wav'));
+      await _menuPlayer.play(
+        AssetSource('sounds/side_menu.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
     } catch (_) {
       // UI sound should not interrupt interactions.
     }
@@ -68,7 +92,11 @@ class UiSoundService {
 
     try {
       await _gameOpenPlayer.stop();
-      await _gameOpenPlayer.play(AssetSource('sounds/game-open.wav'));
+      await _gameOpenPlayer.play(
+        AssetSource('sounds/game-open.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
     } catch (_) {
       // UI sound should not interrupt interactions.
     }

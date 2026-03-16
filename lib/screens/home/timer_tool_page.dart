@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
 import 'package:culinara/widgets/tap_bounce.dart';
+import 'package:culinara/services/background_music_service.dart';
 
 class TimerToolPage extends StatefulWidget {
   const TimerToolPage({super.key});
@@ -17,22 +18,40 @@ class TimerToolPage extends StatefulWidget {
 class _TimerToolPageState extends State<TimerToolPage> {
   static const int _defaultSeconds = 5 * 60;
 
+  // Timer SFX should never steal audio focus from background music.
+  static final AudioContext _sfxContext = AudioContext(
+    android: const AudioContextAndroid(
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.game,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playback,
+      options: {AVAudioSessionOptions.mixWithOthers},
+    ),
+  );
+
   Timer? _timer;
-  final AudioPlayer _runningSfxPlayer = AudioPlayer();
-  final AudioPlayer _alarmSfxPlayer = AudioPlayer();
+  // Single player handles both running loop and alarm sound
+  final AudioPlayer _sfxPlayer = AudioPlayer();
   int _remainingSeconds = _defaultSeconds;
   int _selectedSeconds = _defaultSeconds;
   bool _isRunning = false;
+  bool _isAlarmRinging = false;
 
   Future<void> _startRunningSfx() async {
     try {
-      await _runningSfxPlayer.setReleaseMode(ReleaseMode.loop);
-      await _runningSfxPlayer.setVolume(0.5); // Set volume to 50%
-      await _runningSfxPlayer.stop();
+      await _sfxPlayer.setReleaseMode(ReleaseMode.loop);
+      await _sfxPlayer.setVolume(0.5); // Set volume to 50%
+      await _sfxPlayer.stop();
       debugPrint('Attempting to play timer sound');
       
       // AssetSource automatically looks in assets/ folder
-      await _runningSfxPlayer.play(AssetSource('sounds/timer.wav'));
+      await _sfxPlayer.play(
+        AssetSource('sounds/timer.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
       debugPrint('Timer sound started successfully');
     } catch (e) {
       debugPrint('Error playing timer sound: $e');
@@ -42,7 +61,7 @@ class _TimerToolPageState extends State<TimerToolPage> {
 
   Future<void> _stopRunningSfx() async {
     try {
-      await _runningSfxPlayer.stop();
+      await _sfxPlayer.stop();
     } catch (e) {
       debugPrint('Error stopping timer sound: $e');
       // Best effort cleanup.
@@ -51,29 +70,46 @@ class _TimerToolPageState extends State<TimerToolPage> {
 
   Future<void> _playTimerDoneSfx() async {
     try {
-      await _alarmSfxPlayer.setReleaseMode(ReleaseMode.stop);
-      await _alarmSfxPlayer.setVolume(0.8); // Set alarm volume to 80%
-      await _alarmSfxPlayer.stop();
-      
-      // Add extra delay to ensure stop completes
+      _isAlarmRinging = true;
+      await _sfxPlayer.setReleaseMode(ReleaseMode.loop);
+      await _sfxPlayer.setVolume(0.9); // Louder for alarm
+      await _sfxPlayer.stop();
       await Future.delayed(const Duration(milliseconds: 100));
-      
       debugPrint('Attempting to play alarm sound');
-      
-      // AssetSource automatically looks in assets/ folder
-      await _alarmSfxPlayer.play(AssetSource('sounds/alarm.wav'));
+      await _sfxPlayer.play(
+        AssetSource('sounds/alarm.mp3'),
+        mode: PlayerMode.lowLatency,
+        ctx: _sfxContext,
+      );
       debugPrint('Alarm sound played successfully');
     } catch (e) {
       debugPrint('Error playing alarm sound: $e');
+      // Ensure music does not stay paused if alarm fails.
+      BackgroundMusicService.instance.resumeAfterTimer();
+      _isAlarmRinging = false;
       // SFX should not interrupt timer.
     }
   }
 
+  Future<void> _stopTimerDoneAlarm() async {
+    if (!_isAlarmRinging) return;
+    try {
+      await _sfxPlayer.stop();
+    } catch (_) {
+      // Best effort cleanup.
+    }
+    _isAlarmRinging = false;
+    BackgroundMusicService.instance.resumeAfterTimer();
+  }
+
+
   @override
   void dispose() {
     _timer?.cancel();
-    _runningSfxPlayer.dispose();
-    _alarmSfxPlayer.dispose();
+    _stopTimerDoneAlarm();
+    _sfxPlayer.dispose();
+    // In case a timer had paused music and the page is closed.
+    BackgroundMusicService.instance.resumeAfterTimer();
     super.dispose();
   }
 
@@ -89,6 +125,7 @@ class _TimerToolPageState extends State<TimerToolPage> {
 
   void _setQuickTime(int seconds) {
     if (_isRunning) return;
+    _stopTimerDoneAlarm();
     setState(() {
       _selectedSeconds = seconds;
       _remainingSeconds = seconds;
@@ -97,10 +134,12 @@ class _TimerToolPageState extends State<TimerToolPage> {
 
   void _startTimer() {
     if (_isRunning || _remainingSeconds <= 0) return;
+    _stopTimerDoneAlarm();
 
     setState(() {
       _isRunning = true;
     });
+    BackgroundMusicService.instance.pauseForTimer();
     _startRunningSfx();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -122,14 +161,22 @@ class _TimerToolPageState extends State<TimerToolPage> {
         // Play alarm sound immediately, don't wait for context
         _playTimerDoneSfx();
 
-        // Show snackbar after a brief delay to ensure state is updated
+        // Show snackbar with explicit stop action for looping alarm
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
                   'Timer finished.',
                   style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                ),
+                duration: const Duration(days: 1),
+                action: SnackBarAction(
+                  label: 'Stop',
+                  onPressed: () {
+                    _stopTimerDoneAlarm();
+                  },
                 ),
               ),
             );
@@ -147,6 +194,8 @@ class _TimerToolPageState extends State<TimerToolPage> {
   void _pauseTimer() {
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _isRunning = false;
     });
@@ -155,6 +204,8 @@ class _TimerToolPageState extends State<TimerToolPage> {
   void _resetTimer() {
     _timer?.cancel();
     _stopRunningSfx();
+    _stopTimerDoneAlarm();
+    BackgroundMusicService.instance.resumeAfterTimer();
     setState(() {
       _isRunning = false;
       _remainingSeconds = _selectedSeconds;
@@ -330,6 +381,7 @@ class _TimerToolPageState extends State<TimerToolPage> {
                     selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds;
 
                 if (totalSeconds > 0) {
+                  _stopTimerDoneAlarm();
                   setState(() {
                     _selectedSeconds = totalSeconds;
                     _remainingSeconds = totalSeconds;

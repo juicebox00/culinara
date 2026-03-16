@@ -42,6 +42,19 @@ class _DraftsPageState extends State<DraftsPage> {
     return null;
   }
 
+  List<String> _allShelvesFromRecipes() {
+    final shelves = <String>{};
+    for (final recipe in widget.recipes) {
+      for (final shelf in recipe.shelves) {
+        final normalized = shelf.trim();
+        if (normalized.isNotEmpty) shelves.add(normalized);
+      }
+    }
+    final sorted = shelves.toList(growable: false)
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return sorted;
+  }
+
   Future<void> _openDraft(RecipeDraft draft) async {
     final loadedBaseRecipe = draft.mode == 'edit'
         ? _findRecipe(draft.baseRecipeId)
@@ -55,6 +68,7 @@ class _DraftsPageState extends State<DraftsPage> {
         builder: (_) => AddRecipePage(
           editingRecipe: baseRecipe,
           draftKeyOverride: draft.key,
+          suggestedShelves: _allShelvesFromRecipes(),
         ),
       ),
     );

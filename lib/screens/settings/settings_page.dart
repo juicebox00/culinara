@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../services/auth_service.dart';
 import '../../services/background_music_service.dart';
 import '../../widgets/gingham_pattern_background.dart';
 import '../../widgets/stroked_button_label.dart';
 import '../../widgets/tap_bounce.dart';
 import '../auth/login_page.dart';
-import 'appearance_page.dart';
+import 'about_us_page.dart';
 import 'account_page.dart';
+import 'appearance_page.dart';
 import 'data_management_page.dart';
+import 'help_page.dart';
 import 'system_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -138,10 +141,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // My Profile Section
                   Column(
                     children: [
-                      // User Email
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 24),
                         padding: const EdgeInsets.symmetric(
@@ -179,10 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 48),
-
-                  // Settings Title
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Align(
@@ -197,15 +195,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Settings Options
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
                       children: [
-                        // Account Button
                         _buildSettingsButton(
                           icon: Icons.person,
                           label: 'Account',
@@ -219,21 +213,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           },
                         ),
                         const SizedBox(height: 12),
-
-                        _buildSettingsButton(
-                          icon: Icons.tune_rounded,
-                          label: 'System',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SystemPage(),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
                         _buildSettingsButton(
                           icon: Icons.palette,
                           label: 'Appearance',
@@ -247,8 +226,19 @@ class _SettingsPageState extends State<SettingsPage> {
                           },
                         ),
                         const SizedBox(height: 12),
-
-                        // Data Management Button
+                        _buildSettingsButton(
+                          icon: Icons.tune_rounded,
+                          label: 'System',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SystemPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         _buildSettingsButton(
                           icon: Icons.storage_rounded,
                           label: 'Data Management',
@@ -262,8 +252,32 @@ class _SettingsPageState extends State<SettingsPage> {
                           },
                         ),
                         const SizedBox(height: 12),
-
-                        // Logout Button
+                        _buildSettingsButton(
+                          icon: Icons.help_outline,
+                          label: 'Help',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const HelpPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildSettingsButton(
+                          icon: Icons.info_outline,
+                          label: 'About Us',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AboutUsPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         _buildSettingsButton(
                           icon: Icons.logout,
                           label: 'Logout',
@@ -273,7 +287,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 32),
                 ],
               ),
@@ -296,7 +309,7 @@ class _SettingsPageState extends State<SettingsPage> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: Color.fromARGB(255, 194, 143, 96),
+          color: const Color.fromARGB(255, 194, 143, 96),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(

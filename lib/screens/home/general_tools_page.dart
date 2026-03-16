@@ -48,7 +48,7 @@ class GeneralToolsPage extends StatelessWidget {
       appBar: AppBar(
         centerTitle: true,
         title: const StrokedButtonLabel(
-          'General Tools',
+          'My Tools',
           fillColor: Colors.white,
           strokeColor: Color(0xFF5D4A3A),
         ),

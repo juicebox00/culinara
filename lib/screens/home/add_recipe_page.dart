@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:culinara/models/recipe.dart';
 import 'package:culinara/services/draft_service.dart';
 import 'package:culinara/services/recipe_image_store_service.dart';
-import 'package:culinara/services/recipe_pdf_service.dart';
 import 'package:culinara/services/ui_sound_service.dart';
 import 'package:culinara/widgets/gingham_pattern_background.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
@@ -17,17 +15,49 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 class AddRecipePage extends StatefulWidget {
-  const AddRecipePage({super.key, this.editingRecipe, this.draftKeyOverride});
+  const AddRecipePage({
+    super.key,
+    this.editingRecipe,
+    this.draftKeyOverride,
+    this.suggestedShelves = const [],
+  });
 
   final Recipe? editingRecipe;
   final String? draftKeyOverride;
+  final List<String> suggestedShelves;
 
   @override
   State<AddRecipePage> createState() => _AddRecipePageState();
 }
 
 class _AddRecipePageState extends State<AddRecipePage> {
-  static final RegExp _timerTokenRegex = RegExp(r'\s*\[\[t=(\d+)\]\]\s*$');
+  static final RegExp _timerTokenRegex = RegExp(
+    r'\s*\[\[t=(\d{2}):(\d{2})\]\]\s*$',
+  );
+  static final RegExp _legacyDirectionPrefixRegex = RegExp(
+    r'^Direction\s*Step\s*\d+\s*:\s*',
+    caseSensitive: false,
+  );
+  static final RegExp _sectionHeaderRegex = RegExp(
+    r'^([A-Za-z ]{2,30})\s*:\s*(.*)$',
+  );
+  static final RegExp _bulletPrefixRegex = RegExp(
+    r'^(?:[-*•]\s+|\d+[\).:-]\s*)',
+  );
+  static const Map<String, List<String>> _templateAliases = {
+    'title': ['title', 'recipe', 'name'],
+    'servings': ['servings', 'units', 'serving size', 'yield'],
+    'ingredients': ['ingredients', 'ingredient', 'what you need'],
+    'directions': [
+      'directions',
+      'direction',
+      'steps',
+      'instructions',
+      'method',
+    ],
+    'tags': ['tags', 'tag'],
+    'cooking_time': ['cooking time', 'time', 'total time'],
+  };
   static const List<String> _servingSizeUnits = [
     'Servings',
     'Bowls',
@@ -35,15 +65,22 @@ class _AddRecipePageState extends State<AddRecipePage> {
     'Pieces',
     'Portions',
   ];
+  static const int _maxShelfCount = 10;
+  static const int _maxShelvesPerRecipe = 3;
 
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _ingredientsController = TextEditingController();
   final _directionsController = TextEditingController();
+  final _sourceUrlController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _shelfNameController = TextEditingController();
   final _servingSizeController = TextEditingController();
   final _servingSizeNumberController = TextEditingController();
   final _cookingTimeController = TextEditingController();
   final _tagsController = TextEditingController();
+  final List<String> _availableShelves = [];
+  final Set<String> _selectedShelves = <String>{};
 
   final _imagePicker = ImagePicker();
   String? _coverImagePath;
@@ -56,6 +93,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
   int _cookingHours = 0;
   int _cookingMinutes = 0;
   int _cookingSeconds = 0;
+  late FixedExtentScrollController _cookingHoursController;
+  late FixedExtentScrollController _cookingMinutesController;
+  late FixedExtentScrollController _cookingSecondsController;
   final List<TextEditingController> _ingredientStepControllers = [];
   final List<TextEditingController> _directionStepControllers = [];
   final List<int?> _directionStepDurations = [];
@@ -81,17 +121,45 @@ class _AddRecipePageState extends State<AddRecipePage> {
   void initState() {
     super.initState();
 
+    _availableShelves.addAll(
+      widget.suggestedShelves
+          .map(_normalizeShelfName)
+          .where((name) => name.isNotEmpty),
+    );
+    _dedupeAndSortShelves();
+
+    _cookingHoursController = FixedExtentScrollController(
+      initialItem: _cookingHours,
+    );
+    _cookingMinutesController = FixedExtentScrollController(
+      initialItem: _cookingMinutes,
+    );
+    _cookingSecondsController = FixedExtentScrollController(
+      initialItem: _cookingSeconds,
+    );
+
     if (_isEditMode) {
       final base = widget.editingRecipe!;
       _editingRecipeId = base.id;
       _titleController.text = base.title;
       _ingredientsController.text = base.ingredients;
       _directionsController.text = base.directions;
+      _sourceUrlController.text = base.sourceUrl;
+      _notesController.text = base.notes;
+      _selectedShelves
+        ..clear()
+        ..addAll(
+          base.shelves.map(_normalizeShelfName).where((s) => s.isNotEmpty),
+        );
+      _availableShelves.addAll(_selectedShelves);
+      _dedupeAndSortShelves();
       _parseServingSize(base.servingSize);
       _parseCookingTime(base.cookingTime);
       _tagsController.text = base.tags.join(', ');
       _coverImagePath = base.coverImageFilePath;
       _legacyCoverImageBytes = base.coverImageBytes;
+
+      _updateCookingTimeControllers();
     }
 
     _setStepControllersFromText();
@@ -100,6 +168,8 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController,
       _ingredientsController,
       _directionsController,
+      _sourceUrlController,
+      _notesController,
       _servingSizeNumberController,
       _tagsController,
     ]) {
@@ -118,7 +188,6 @@ class _AddRecipePageState extends State<AddRecipePage> {
       return;
     }
 
-    // Try to parse "number unit" format
     final parts = servingSize.trim().split(RegExp(r'\s+'));
     if (parts.isNotEmpty && int.tryParse(parts[0]) != null) {
       _servingSizeNumberController.text = parts[0];
@@ -129,6 +198,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
         } else {
           _selectedServingUnit = 'Servings';
         }
+      } else {
+        // No unit provided, default to Servings
+        _selectedServingUnit = 'Servings';
       }
     } else {
       _servingSizeNumberController.text = servingSize;
@@ -144,9 +216,8 @@ class _AddRecipePageState extends State<AddRecipePage> {
       return;
     }
 
-    // Parse "HH:MM:SS" or similar formats
     final parts = cookingTime.split(':');
-    if (parts.length >= 1) {
+    if (parts.isNotEmpty) {
       _cookingHours = int.tryParse(parts[0]) ?? 0;
     }
     if (parts.length >= 2) {
@@ -154,6 +225,20 @@ class _AddRecipePageState extends State<AddRecipePage> {
     }
     if (parts.length >= 3) {
       _cookingSeconds = int.tryParse(parts[2]) ?? 0;
+    }
+
+    _updateCookingTimeControllers();
+  }
+
+  void _updateCookingTimeControllers() {
+    if (_cookingHours >= 0 && _cookingHours < 24) {
+      _cookingHoursController.jumpToItem(_cookingHours);
+    }
+    if (_cookingMinutes >= 0 && _cookingMinutes < 60) {
+      _cookingMinutesController.jumpToItem(_cookingMinutes);
+    }
+    if (_cookingSeconds >= 0 && _cookingSeconds < 60) {
+      _cookingSecondsController.jumpToItem(_cookingSeconds);
     }
   }
 
@@ -169,6 +254,8 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController,
       _ingredientsController,
       _directionsController,
+      _sourceUrlController,
+      _notesController,
       _servingSizeNumberController,
       _cookingTimeController,
       _tagsController,
@@ -179,9 +266,15 @@ class _AddRecipePageState extends State<AddRecipePage> {
     _titleController.dispose();
     _ingredientsController.dispose();
     _directionsController.dispose();
+    _sourceUrlController.dispose();
+    _notesController.dispose();
+    _shelfNameController.dispose();
     _servingSizeNumberController.dispose();
     _cookingTimeController.dispose();
     _tagsController.dispose();
+    _cookingHoursController.dispose();
+    _cookingMinutesController.dispose();
+    _cookingSecondsController.dispose();
     _disposeStepControllers(_ingredientStepControllers);
     _disposeStepControllers(_directionStepControllers);
     super.dispose();
@@ -276,7 +369,11 @@ class _AddRecipePageState extends State<AddRecipePage> {
           ? _directionStepDurations[i]
           : null;
       if (durationSeconds != null && durationSeconds > 0) {
-        serializedDirectionSteps.add('$text [[t=$durationSeconds]]');
+        final minutes = durationSeconds ~/ 60;
+        final seconds = durationSeconds % 60;
+        final mmss =
+            '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        serializedDirectionSteps.add('$text [[t=$mmss]]');
       } else {
         serializedDirectionSteps.add(text);
       }
@@ -509,7 +606,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
                 onPressed: () {
                   UiSoundService.instance.playButtonBeep();
                   final totalSeconds =
-                      selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds;
+                      selectedHours * 3600 +
+                      selectedMinutes * 60 +
+                      selectedSeconds;
                   Navigator.pop(context, totalSeconds);
                 },
                 child: const StrokedButtonLabel(
@@ -541,7 +640,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
       return (rawStep.trim(), null);
     }
 
-    final seconds = int.tryParse(match.group(1) ?? '');
+    final mm = int.tryParse(match.group(1) ?? '');
+    final ss = int.tryParse(match.group(2) ?? '');
+    final seconds = mm != null && ss != null ? (mm * 60 + ss) : null;
     final cleaned = rawStep.replaceFirst(_timerTokenRegex, '').trim();
     return (cleaned, (seconds == null || seconds <= 0) ? null : seconds);
   }
@@ -624,11 +725,27 @@ class _AddRecipePageState extends State<AddRecipePage> {
       _titleController.text = draftRecipe.title;
       _ingredientsController.text = draftRecipe.ingredients;
       _directionsController.text = draftRecipe.directions;
+      _sourceUrlController.text = draftRecipe.sourceUrl;
+      _notesController.text = draftRecipe.notes;
+      _selectedShelves
+        ..clear()
+        ..addAll(
+          draftRecipe.shelves
+              .map(_normalizeShelfName)
+              .where((s) => s.isNotEmpty),
+        );
+      _availableShelves.addAll(_selectedShelves);
+      _dedupeAndSortShelves();
       _servingSizeController.text = draftRecipe.servingSize;
       _cookingTimeController.text = draftRecipe.cookingTime;
       _tagsController.text = draftRecipe.tags.join(', ');
       _coverImagePath = draftRecipe.coverImageFilePath;
       _legacyCoverImageBytes = draftRecipe.coverImageBytes;
+
+      _parseServingSize(draftRecipe.servingSize);
+
+      _parseCookingTime(draftRecipe.cookingTime);
+
       _setStepControllersFromText();
     });
   }
@@ -644,6 +761,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
     return _titleController.text.trim().isNotEmpty ||
         _ingredientsController.text.trim().isNotEmpty ||
         _directionsController.text.trim().isNotEmpty ||
+        _sourceUrlController.text.trim().isNotEmpty ||
+        _notesController.text.trim().isNotEmpty ||
+        _selectedShelves.isNotEmpty ||
         _servingSizeController.text.trim().isNotEmpty ||
         _cookingTimeController.text.trim().isNotEmpty ||
         _tagsController.text.trim().isNotEmpty ||
@@ -674,6 +794,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
       coverImageBytes: _legacyCoverImageBytes,
       ingredients: _ingredientsController.text.trim(),
       directions: _directionsController.text.trim(),
+      sourceUrl: _sourceUrlController.text.trim(),
+      notes: _notesController.text.trim(),
+      shelves: _selectedShelves.toList(growable: false),
       servingSize: _buildServingSize(),
       cookingTime: _buildCookingTime(),
       tags: _parseTags(_tagsController.text),
@@ -721,29 +844,632 @@ class _AddRecipePageState extends State<AddRecipePage> {
     _onDraftInputChanged();
   }
 
-  Future<void> _importFromPdf() async {
-    final imported = await RecipePdfService.importRecipeFromPdf();
-    if (imported == null || !mounted) return;
+  String _generateClipboardTemplate() {
+    return '''Title:
+Pasta Carbonara
 
-    _loadRecipeIntoForm(imported);
-    _onDraftInputChanged();
+Servings:
+4 Servings
 
+Ingredients:
+- 400g pasta
+- 200g guanciale
+- 4 eggs
+- 100g pecorino romano
+- salt and black pepper
+
+Directions:
+1. Boil water and cook pasta [[t=09:00]]
+2. Fry guanciale until crispy [[t=05:00]]
+3. Mix eggs with grated cheese
+4. Combine hot pasta with guanciale and egg mixture [[t=02:00]]
+
+Tags:
+italian, pasta, classic
+
+Cooking Time:
+00:15:00''';
+  }
+
+  Future<void> _copyTemplateToClipboard() async {
+    final template = _generateClipboardTemplate();
+    await Clipboard.setData(ClipboardData(text: template));
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Imported text from PDF. Please review before saving.',
+          'Template copied! Fill each section in Notes, then paste it back here.',
           style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
         ),
+        duration: const Duration(seconds: 3),
+        backgroundColor: const Color.fromARGB(255, 194, 143, 96),
+      ),
+    );
+  }
+
+  ({Recipe? recipe, String? error}) _parseClipboardTemplate(String text) {
+    final lines = text.replaceAll('\r\n', '\n').split('\n');
+    String? currentSection;
+    String? title;
+    String? servings;
+    String? cookingTime;
+    final ingredients = <String>[];
+    final directions = <String>[];
+    final directionDurations = <int?>[];
+    final tagsBuffer = <String>[];
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+
+      final legacyDirection = _parseLegacyDirectionLine(line);
+      if (legacyDirection != null) {
+        directions.add(legacyDirection.$1);
+        directionDurations.add(legacyDirection.$2);
+        currentSection = 'directions';
+        continue;
+      }
+
+      final headerMatch = _sectionHeaderRegex.firstMatch(line);
+      if (headerMatch != null) {
+        final rawHeader = headerMatch.group(1)!.trim().toLowerCase();
+        final value = headerMatch.group(2)!.trim();
+        final section = _resolveTemplateSection(rawHeader);
+        if (section != null) {
+          currentSection = section;
+          if (value.isNotEmpty) {
+            _appendTemplateLine(
+              section: section,
+              value: value,
+              titleSetter: (v) => title = v,
+              servingsSetter: (v) => servings = v,
+              cookingTimeSetter: (v) => cookingTime = v,
+              ingredients: ingredients,
+              directions: directions,
+              directionDurations: directionDurations,
+              tagsBuffer: tagsBuffer,
+            );
+          }
+          continue;
+        }
+      }
+
+      if (currentSection != null) {
+        _appendTemplateLine(
+          section: currentSection,
+          value: line,
+          titleSetter: (v) => title = v,
+          servingsSetter: (v) => servings = v,
+          cookingTimeSetter: (v) => cookingTime = v,
+          ingredients: ingredients,
+          directions: directions,
+          directionDurations: directionDurations,
+          tagsBuffer: tagsBuffer,
+        );
+      }
+    }
+
+    final normalizedTitle = title?.trim() ?? '';
+    if (normalizedTitle.isEmpty) {
+      return (
+        recipe: null,
+        error: 'Missing Title section. Add "Title:" then the recipe name.',
+      );
+    }
+    if (ingredients.isEmpty) {
+      return (
+        recipe: null,
+        error:
+            'Missing Ingredients section. Add "Ingredients:" with one item per line.',
+      );
+    }
+    if (directions.isEmpty) {
+      return (
+        recipe: null,
+        error:
+            'Missing Directions section. Add "Directions:" with one step per line.',
+      );
+    }
+
+    int cookingHours = 0;
+    int cookingMinutes = 0;
+    int cookingSeconds = 0;
+    final normalizedCookingTime = (cookingTime ?? '').trim();
+    if (normalizedCookingTime.isNotEmpty) {
+      final timeParts = normalizedCookingTime
+          .split(':')
+          .map((p) => p.trim())
+          .toList();
+      if (timeParts.length == 2) {
+        cookingMinutes = int.tryParse(timeParts[0]) ?? 0;
+        cookingSeconds = int.tryParse(timeParts[1]) ?? 0;
+      } else if (timeParts.length == 3) {
+        cookingHours = int.tryParse(timeParts[0]) ?? 0;
+        cookingMinutes = int.tryParse(timeParts[1]) ?? 0;
+        cookingSeconds = int.tryParse(timeParts[2]) ?? 0;
+      }
+    }
+
+    var directionsText = '';
+    for (int i = 0; i < directions.length; i++) {
+      if (directionsText.isNotEmpty) directionsText += '\n';
+      directionsText += directions[i];
+      final duration = directionDurations[i];
+      if (duration != null && duration > 0) {
+        final mm = duration ~/ 60;
+        final ss = duration % 60;
+        directionsText +=
+            ' [[t=${mm.toString().padLeft(2, '0')}:${ss.toString().padLeft(2, '0')}]]';
+      }
+    }
+
+    final recipe = Recipe(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: normalizedTitle,
+      imagePath: 'images/default_recipe.jpg',
+      ingredients: ingredients.join('\n'),
+      directions: directionsText,
+      sourceUrl: '',
+      notes: '',
+      shelves: const [],
+      tags: _parseTags(tagsBuffer.join(', ')),
+      servingSize: servings?.isNotEmpty == true ? servings! : '1 Servings',
+      cookingTime:
+          '${cookingHours.toString().padLeft(2, '0')}:${cookingMinutes.toString().padLeft(2, '0')}:${cookingSeconds.toString().padLeft(2, '0')}',
+    );
+
+    return (recipe: recipe, error: null);
+  }
+
+  String? _resolveTemplateSection(String header) {
+    for (final entry in _templateAliases.entries) {
+      if (entry.value.contains(header)) return entry.key;
+    }
+    return null;
+  }
+
+  (String, int?)? _parseLegacyDirectionLine(String line) {
+    if (!_legacyDirectionPrefixRegex.hasMatch(line)) return null;
+    final rawDirection = line
+        .replaceFirst(_legacyDirectionPrefixRegex, '')
+        .trim();
+    final parsed = _extractDirectionWithTimer(rawDirection);
+    return (parsed.$1, parsed.$2);
+  }
+
+  void _appendTemplateLine({
+    required String section,
+    required String value,
+    required void Function(String) titleSetter,
+    required void Function(String) servingsSetter,
+    required void Function(String) cookingTimeSetter,
+    required List<String> ingredients,
+    required List<String> directions,
+    required List<int?> directionDurations,
+    required List<String> tagsBuffer,
+  }) {
+    final cleaned = value.replaceFirst(_bulletPrefixRegex, '').trim();
+    if (cleaned.isEmpty) return;
+
+    switch (section) {
+      case 'title':
+        titleSetter(cleaned);
+        break;
+      case 'servings':
+        servingsSetter(cleaned);
+        break;
+      case 'ingredients':
+        ingredients.add(cleaned);
+        break;
+      case 'directions':
+        final parsed = _extractDirectionWithTimer(cleaned);
+        directions.add(parsed.$1);
+        directionDurations.add(parsed.$2);
+        break;
+      case 'tags':
+        tagsBuffer.add(cleaned);
+        break;
+      case 'cooking_time':
+        cookingTimeSetter(cleaned);
+        break;
+    }
+  }
+
+  (String, int?) _extractDirectionWithTimer(String text) {
+    final timerMatch = _timerTokenRegex.firstMatch(text);
+    if (timerMatch == null) return (text, null);
+
+    final mm = int.tryParse(timerMatch.group(1) ?? '') ?? 0;
+    final ss = int.tryParse(timerMatch.group(2) ?? '') ?? 0;
+    final duration = (mm * 60) + ss;
+    final cleaned = text.replaceFirst(_timerTokenRegex, '').trim();
+    return (cleaned, duration > 0 ? duration : null);
+  }
+
+  Future<void> _importFromClipboard() async {
+    try {
+      final data = await Clipboard.getData('text/plain');
+      if (data == null || data.text == null || data.text!.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Clipboard is empty. Copy a template first!',
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final result = _parseClipboardTemplate(data.text!);
+      if (result.recipe == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.error ??
+                  'Invalid template format. Please check and try again.',
+              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      _loadRecipeIntoForm(result.recipe!);
+      _onDraftInputChanged();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Imported from clipboard. Please review before saving.',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: const Color.fromARGB(255, 194, 143, 96),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error importing from clipboard: $e',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showTemplateDialog() async {
+    final template = _generateClipboardTemplate();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF8EFE3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
+        ),
+        title: Text(
+          'Recipe Template Format',
+          style: GoogleFonts.fredoka(
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF5D4A3A),
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Template Example:',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5E6D3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  template,
+                  style: GoogleFonts.fredoka(fontSize: 11),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sections:',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Required: Title, Ingredients, Directions\n'
+                'Optional: Servings, Tags, Cooking Time\n'
+                'Accepted headers include aliases like:\n'
+                'Recipe/Title, Units/Servings, Steps/Instructions',
+                style: GoogleFonts.fredoka(
+                  fontSize: 11,
+                  color: const Color(0xFF8B6F47),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Timer Format:',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use [[t=MM:SS]] at end of direction steps\n'
+                'MM = minutes, SS = seconds\n'
+                'Example: Simmer sauce [[t=05:30]]',
+                style: GoogleFonts.fredoka(
+                  fontSize: 11,
+                  color: const Color(0xFF8B6F47),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'How to Use:',
+                style: GoogleFonts.fredoka(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '1. Tap "Copy Template"\n'
+                '2. Paste in Notes app\n'
+                '3. Fill each section (one ingredient/step per line)\n'
+                '4. Copy your filled template\n'
+                '5. Tap "Paste Template"',
+                style: GoogleFonts.fredoka(
+                  fontSize: 11,
+                  color: const Color(0xFF5D4A3A),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Got it',
+              style: GoogleFonts.fredoka(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF5D4A3A),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   List<String> _parseTags(String rawTags) {
-    return rawTags
-        .split(',')
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .toList();
+    final normalized = rawTags.trim();
+    if (normalized.isEmpty) return const <String>[];
+
+    final tags = <String>{};
+
+    for (final token in normalized.split(RegExp(r'[,\n]+'))) {
+      final cleaned = token.trim().replaceFirst(RegExp(r'^#+'), '');
+      if (cleaned.isNotEmpty) tags.add(cleaned);
+    }
+
+    final hashMatches = RegExp(r'#([A-Za-z0-9_-]+)').allMatches(normalized);
+    for (final match in hashMatches) {
+      final tag = (match.group(1) ?? '').trim();
+      if (tag.isNotEmpty) tags.add(tag);
+    }
+
+    return tags.toList(growable: false);
+  }
+
+  String _normalizeShelfName(String raw) {
+    return raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  void _dedupeAndSortShelves() {
+    final seen = <String>{};
+    _availableShelves
+      ..removeWhere((s) {
+        final normalized = s.trim().toLowerCase();
+        if (normalized.isEmpty || seen.contains(normalized)) return true;
+        seen.add(normalized);
+        return false;
+      })
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  Future<void> _showCreateShelfDialog() async {
+    _shelfNameController.clear();
+    final created = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF5E6D3),
+        title: Text(
+          'Create Shelf',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: _shelfNameController,
+          maxLength: 24,
+          autofocus: true,
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          decoration: _inputDecoration('Shelf name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const StrokedButtonLabel('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, _shelfNameController.text);
+            },
+            child: const StrokedButtonLabel('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    final normalized = _normalizeShelfName(created ?? '');
+    if (normalized.isEmpty) return;
+
+    final exists = _availableShelves.any(
+      (s) => s.toLowerCase() == normalized.toLowerCase(),
+    );
+    if (!exists && _availableShelves.length >= _maxShelfCount) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can create up to $_maxShelfCount shelves.',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedShelves.length >= _maxShelvesPerRecipe &&
+        !_selectedShelves.any(
+          (s) => s.toLowerCase() == normalized.toLowerCase(),
+        )) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can assign up to $_maxShelvesPerRecipe shelves per recipe.',
+            style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      if (!exists) {
+        _availableShelves.add(normalized);
+        _dedupeAndSortShelves();
+      }
+
+      final canonical = _availableShelves.firstWhere(
+        (s) => s.toLowerCase() == normalized.toLowerCase(),
+        orElse: () => normalized,
+      );
+      _selectedShelves.add(canonical);
+    });
+    _onDraftInputChanged();
+  }
+
+  void _toggleShelfSelection(String shelf) {
+    setState(() {
+      if (_selectedShelves.contains(shelf)) {
+        _selectedShelves.remove(shelf);
+      } else {
+        if (_selectedShelves.length >= _maxShelvesPerRecipe) {
+          return;
+        }
+        _selectedShelves.add(shelf);
+      }
+    });
+    _onDraftInputChanged();
+  }
+
+  Widget _buildShelvesEditor() {
+    final canAddMoreShelves = _availableShelves.length < _maxShelfCount;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5E6D3),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Shelves (up to $_maxShelvesPerRecipe)',
+                  style: GoogleFonts.fredoka(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF5D4A3A),
+                  ),
+                ),
+              ),
+              PressBounce(
+                child: OutlinedButton.icon(
+                  onPressed: canAddMoreShelves ? _showCreateShelfDialog : null,
+                  icon: const Icon(Icons.add),
+                  label: const StrokedButtonLabel('Add Shelf'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide.none,
+                    foregroundColor: const Color(0xFF5D4A3A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_availableShelves.isEmpty)
+            Text(
+              'Create shelves like Weeknight, Desserts, or To Try.',
+              style: GoogleFonts.fredoka(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF8B6F47),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _availableShelves.map((shelf) {
+                final selected = _selectedShelves.contains(shelf);
+                return FilterChip(
+                  label: Text(
+                    shelf,
+                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                  ),
+                  selected: selected,
+                  selectedColor: const Color(0xFFD2B48C),
+                  checkmarkColor: const Color(0xFF5D4A3A),
+                  onSelected: (isSelected) {
+                    if (!isSelected ||
+                        _selectedShelves.length < _maxShelvesPerRecipe) {
+                      _toggleShelfSelection(shelf);
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveRecipe() async {
@@ -775,6 +1501,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
       coverImageBytes: _legacyCoverImageBytes,
       ingredients: _ingredientsController.text.trim(),
       directions: _directionsController.text.trim(),
+      sourceUrl: _sourceUrlController.text.trim(),
+      notes: _notesController.text.trim(),
+      shelves: _selectedShelves.toList(growable: false),
       servingSize: _buildServingSize(),
       cookingTime: _buildCookingTime(),
       tags: _parseTags(_tagsController.text),
@@ -926,8 +1655,8 @@ class _AddRecipePageState extends State<AddRecipePage> {
                           children: [
                             Expanded(
                               child: PressBounce(
-                                child: OutlinedButton.icon(
-                                  onPressed: _importFromPdf,
+                                child: OutlinedButton(
+                                  onPressed: _copyTemplateToClipboard,
                                   style: OutlinedButton.styleFrom(
                                     backgroundColor: const Color.fromARGB(
                                       255,
@@ -938,11 +1667,47 @@ class _AddRecipePageState extends State<AddRecipePage> {
                                     foregroundColor: Colors.white,
                                     side: BorderSide.none,
                                   ),
-                                  icon: const Icon(Icons.picture_as_pdf),
-                                  label: const StrokedButtonLabel(
-                                    'Import from PDF',
+                                  child: const StrokedButtonLabel(
+                                    'Copy Template',
                                   ),
                                 ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: PressBounce(
+                                child: OutlinedButton(
+                                  onPressed: _importFromClipboard,
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: const Color.fromARGB(
+                                      255,
+                                      194,
+                                      143,
+                                      96,
+                                    ),
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide.none,
+                                  ),
+                                  child: const StrokedButtonLabel(
+                                    'Paste Template',
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            PressBounce(
+                              child: IconButton(
+                                onPressed: _showTemplateDialog,
+                                style: IconButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(
+                                    255,
+                                    194,
+                                    143,
+                                    96,
+                                  ),
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.help_outline),
                               ),
                             ),
                           ],
@@ -1040,6 +1805,25 @@ class _AddRecipePageState extends State<AddRecipePage> {
                         },
                       ),
                       const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _sourceUrlController,
+                        decoration: _inputDecoration('Source Link (optional)'),
+                        keyboardType: TextInputType.url,
+                        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _notesController,
+                        decoration: _inputDecoration('Notes (optional)'),
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        minLines: 3,
+                        maxLines: 5,
+                        style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildShelvesEditor(),
+                      const SizedBox(height: 12),
                       _buildStepEditor(
                         title: 'Ingredients (one item per entry)',
                         controllers: _ingredientStepControllers,
@@ -1106,22 +1890,28 @@ class _AddRecipePageState extends State<AddRecipePage> {
                               controller: _servingSizeNumberController,
                               decoration: _inputDecoration('Number'),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              style: GoogleFonts.fredoka(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             flex: 3,
                             child: DropdownButtonFormField<String>(
-                              value: _selectedServingUnit,
+                              initialValue: _selectedServingUnit,
                               decoration: _inputDecoration('Unit'),
                               items: _servingSizeUnits.map((unit) {
                                 return DropdownMenuItem(
                                   value: unit,
                                   child: Text(
                                     unit,
-                                    style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.fredoka(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 );
                               }).toList(),
@@ -1155,14 +1945,17 @@ class _AddRecipePageState extends State<AddRecipePage> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                border: Border.all(
+                                  color: const Color(0xFF8B6F47),
+                                  width: 1.5,
+                                ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               height: 150,
                               child: CupertinoPicker(
                                 magnification: 1.2,
                                 squeeze: 1.2,
-                                scrollController: FixedExtentScrollController(initialItem: _cookingHours),
+                                scrollController: _cookingHoursController,
                                 onSelectedItemChanged: (int value) {
                                   setState(() {
                                     _cookingHours = value;
@@ -1170,7 +1963,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
                                   });
                                 },
                                 itemExtent: 50.0,
-                                children: List<Widget>.generate(24, (int index) {
+                                children: List<Widget>.generate(24, (
+                                  int index,
+                                ) {
                                   return Center(
                                     child: Text(
                                       '${index.toString().padLeft(2, '0')}h',
@@ -1189,14 +1984,17 @@ class _AddRecipePageState extends State<AddRecipePage> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                border: Border.all(
+                                  color: const Color(0xFF8B6F47),
+                                  width: 1.5,
+                                ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               height: 150,
                               child: CupertinoPicker(
                                 magnification: 1.2,
                                 squeeze: 1.2,
-                                scrollController: FixedExtentScrollController(initialItem: _cookingMinutes),
+                                scrollController: _cookingMinutesController,
                                 onSelectedItemChanged: (int value) {
                                   setState(() {
                                     _cookingMinutes = value;
@@ -1204,7 +2002,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
                                   });
                                 },
                                 itemExtent: 50.0,
-                                children: List<Widget>.generate(60, (int index) {
+                                children: List<Widget>.generate(60, (
+                                  int index,
+                                ) {
                                   return Center(
                                     child: Text(
                                       '${index.toString().padLeft(2, '0')}m',
@@ -1223,14 +2023,17 @@ class _AddRecipePageState extends State<AddRecipePage> {
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFF8B6F47), width: 1.5),
+                                border: Border.all(
+                                  color: const Color(0xFF8B6F47),
+                                  width: 1.5,
+                                ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               height: 150,
                               child: CupertinoPicker(
                                 magnification: 1.2,
                                 squeeze: 1.2,
-                                scrollController: FixedExtentScrollController(initialItem: _cookingSeconds),
+                                scrollController: _cookingSecondsController,
                                 onSelectedItemChanged: (int value) {
                                   setState(() {
                                     _cookingSeconds = value;
@@ -1238,7 +2041,9 @@ class _AddRecipePageState extends State<AddRecipePage> {
                                   });
                                 },
                                 itemExtent: 50.0,
-                                children: List<Widget>.generate(60, (int index) {
+                                children: List<Widget>.generate(60, (
+                                  int index,
+                                ) {
                                   return Center(
                                     child: Text(
                                       '${index.toString().padLeft(2, '0')}s',

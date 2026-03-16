@@ -111,6 +111,16 @@ class _DataManagementPageState extends State<DataManagementPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          'Data Management',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFFF5E6D3),
+        foregroundColor: const Color(0xFF5D4A3A),
+        elevation: 0,
+      ),
       body: Stack(
         children: [
           const GinghamPatternBackground(),
@@ -120,23 +130,7 @@ class _DataManagementPageState extends State<DataManagementPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      PressBounce(
-                        child: IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.arrow_back),
-                          color: const Color(0xFF5D4A3A),
-                        ),
-                      ),
-                      const StrokedButtonLabel(
-                        'Data Management',
-                        fillColor: Color(0xFF5D4A3A),
-                        strokeColor: Color(0xFFF5E6D3),
-                        fontSize: 24,
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 8),
                   const SizedBox(height: 20),
                   Container(
                     width: double.infinity,

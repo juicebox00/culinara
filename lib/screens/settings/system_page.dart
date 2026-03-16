@@ -1,8 +1,6 @@
 import 'package:culinara/services/background_music_service.dart';
 import 'package:culinara/services/ui_sound_service.dart';
 import 'package:culinara/widgets/gingham_pattern_background.dart';
-import 'package:culinara/widgets/stroked_button_label.dart';
-import 'package:culinara/widgets/tap_bounce.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -67,6 +65,16 @@ class _SystemPageState extends State<SystemPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          'System',
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFFF5E6D3),
+        foregroundColor: const Color(0xFF5D4A3A),
+        elevation: 0,
+      ),
       body: Stack(
         children: [
           const GinghamPatternBackground(),
@@ -82,23 +90,7 @@ class _SystemPageState extends State<SystemPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            PressBounce(
-                              child: IconButton(
-                                onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.arrow_back),
-                                color: const Color(0xFF5D4A3A),
-                              ),
-                            ),
-                            const StrokedButtonLabel(
-                              'System',
-                              fillColor: Color(0xFF5D4A3A),
-                              strokeColor: Color(0xFFF5E6D3),
-                              fontSize: 24,
-                            ),
-                          ],
-                        ),
+                        const SizedBox(height: 8),
                         const SizedBox(height: 20),
                         Container(
                           width: double.infinity,
@@ -135,7 +127,7 @@ class _SystemPageState extends State<SystemPage> {
                                   ),
                                   Switch(
                                     value: _musicEnabled,
-                                    activeColor: const Color(0xFF8B5E3C),
+                                    activeThumbColor: const Color(0xFF8B5E3C),
                                     onChanged: _toggleMusic,
                                   ),
                                 ],
@@ -188,7 +180,7 @@ class _SystemPageState extends State<SystemPage> {
                                   ),
                                   Switch(
                                     value: _sfxEnabled,
-                                    activeColor: const Color(0xFF8B5E3C),
+                                    activeThumbColor: const Color(0xFF8B5E3C),
                                     onChanged: _toggleSfx,
                                   ),
                                 ],

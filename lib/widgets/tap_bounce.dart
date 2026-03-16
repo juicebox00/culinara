@@ -7,6 +7,7 @@ class TapBounce extends StatefulWidget {
     super.key,
     required this.child,
     required this.onTap,
+    this.onLongPress,
     this.enabled = true,
     this.minScale = 0.94,
     this.duration = const Duration(milliseconds: 280),
@@ -14,6 +15,7 @@ class TapBounce extends StatefulWidget {
 
   final Widget child;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool enabled;
   final double minScale;
   final Duration duration;
@@ -71,6 +73,13 @@ class _TapBounceState extends State<TapBounce>
     widget.onTap();
   }
 
+  void _handleLongPress() {
+    if (!widget.enabled || widget.onLongPress == null) return;
+    _controller.forward(from: 0);
+    UiSoundService.instance.playButtonBeep();
+    widget.onLongPress!();
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -82,6 +91,7 @@ class _TapBounceState extends State<TapBounce>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _handleTap,
+      onLongPress: _handleLongPress,
       child: AnimatedBuilder(
         animation: _scale,
         builder: (context, child) {

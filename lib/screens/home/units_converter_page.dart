@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:culinara/widgets/stroked_button_label.dart';
 import 'package:culinara/widgets/tap_bounce.dart';
 
@@ -23,6 +24,7 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
   String _fromUnit = 'Cup';
   String _toUnit = 'Milliliter';
   String _result = '236.588';
+  String _secondaryResult = '';
 
   static const List<String> _categories = [_volume, _weight, _temperature];
 
@@ -32,9 +34,13 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
     'Cup': 236.588,
     'Milliliter': 1,
     'Liter': 1000,
+    'Gallon': 3785.41,
+    'Quart': 946.353,
+    'Pint': 473.176,
   };
 
   static const Map<String, double> _weightToGram = {
+    'Milligram': 0.001,
     'Gram': 1,
     'Kilogram': 1000,
     'Ounce': 28.3495,
@@ -62,12 +68,69 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
       _category = category;
       _fromUnit = units.first;
       _toUnit = units.length > 1 ? units[1] : units.first;
+      _result = '0';
     });
     _recalculate();
   }
 
   double? _parsedInput() {
-    return double.tryParse(_inputController.text.trim());
+    final input = _inputController.text.trim();
+    if (input.isEmpty) return null;
+
+    // Try to parse as decimal first
+    final decimal = double.tryParse(input);
+    if (decimal != null) return decimal;
+
+    // Try to parse as fraction (e.g., "1/2")
+    final fractionRegex = RegExp(r'^(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)$');
+    final fractionMatch = fractionRegex.firstMatch(input);
+    if (fractionMatch != null) {
+      final numerator = double.parse(fractionMatch.group(1)!);
+      final denominator = double.parse(fractionMatch.group(2)!);
+      if (denominator != 0) return numerator / denominator;
+    }
+
+    // Try to parse as mixed fraction (e.g., "2 1/3")
+    final mixedRegex = RegExp(r'^(\d+\.?\d?)\s+(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)$');
+    final mixedMatch = mixedRegex.firstMatch(input);
+    if (mixedMatch != null) {
+      final whole = double.parse(mixedMatch.group(1)!);
+      final numerator = double.parse(mixedMatch.group(2)!);
+      final denominator = double.parse(mixedMatch.group(3)!);
+      if (denominator != 0) return whole + (numerator / denominator);
+    }
+
+    return null;
+  }
+
+  String _decimalToFraction(double value) {
+    // Convert decimal to fraction string for display
+    if (value == value.toInt()) {
+      return value.toInt().toString();
+    }
+
+    // Common fractions mapping
+    final fractionMap = {
+      0.125: '1/8',
+      0.25: '1/4',
+      0.333: '1/3',
+      0.375: '3/8',
+      0.5: '1/2',
+      0.625: '5/8',
+      0.666: '2/3',
+      0.75: '3/4',
+      0.875: '7/8',
+    };
+
+    // Check for common fractions
+    for (final entry in fractionMap.entries) {
+      if ((value - entry.key).abs() < 0.001) {
+        return entry.value;
+      }
+    }
+
+    // If not a common fraction, return decimal format
+    return value.toStringAsFixed(4).replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
   void _recalculate() {
@@ -75,6 +138,7 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
     if (input == null) {
       setState(() {
         _result = 'Invalid number';
+        _secondaryResult = '';
       });
       return;
     }
@@ -97,7 +161,9 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
     }
 
     setState(() {
-      _result = converted.toStringAsFixed(3).replaceFirst(RegExp(r'\.0+$'), '');
+      final resultStr = converted.toStringAsFixed(3).replaceFirst(RegExp(r'\.0+$'), '');
+      _result = resultStr;
+      _secondaryResult = _decimalToFraction(input);
     });
   }
 
@@ -119,6 +185,17 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
   @override
   Widget build(BuildContext context) {
     final units = _unitsForCategory(_category);
+    
+    // Ensure selected units are valid for current category
+    String fromUnit = _fromUnit;
+    String toUnit = _toUnit;
+    
+    if (!units.contains(fromUnit)) {
+      fromUnit = units.isNotEmpty ? units.first : 'N/A';
+    }
+    if (!units.contains(toUnit)) {
+      toUnit = units.length > 1 ? units[1] : (units.isNotEmpty ? units.first : 'N/A');
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8EFE3),
@@ -152,7 +229,10 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
           const SizedBox(height: 12),
           TextField(
             controller: _inputController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: TextInputType.text,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9/. ]')),
+            ],
             onChanged: (_) => _recalculate(),
             style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
             decoration: _inputDecoration(label: 'Value'),
@@ -162,7 +242,7 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
             children: [
               Expanded(
                 child: _buildDropdown(
-                  value: _fromUnit,
+                  value: fromUnit,
                   items: units,
                   label: 'From',
                   onChanged: (value) {
@@ -185,7 +265,7 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: _buildDropdown(
-                  value: _toUnit,
+                  value: toUnit,
                   items: units,
                   label: 'To',
                   onChanged: (value) {
@@ -219,7 +299,9 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _result,
+                  _secondaryResult.isEmpty
+                      ? _result
+                      : '$_result or $_secondaryResult',
                   style: GoogleFonts.fredoka(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -228,7 +310,7 @@ class _UnitsConverterPageState extends State<UnitsConverterPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$_fromUnit -> $_toUnit',
+                  '$fromUnit -> $toUnit',
                   style: GoogleFonts.fredoka(
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF8B6F47),

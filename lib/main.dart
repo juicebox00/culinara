@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +11,23 @@ import 'services/ui_sound_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure global audio so background music and UI sounds can mix.
+  await AudioPlayer.global.setAudioContext(
+    AudioContext(
+      android: const AudioContextAndroid(
+        // Treat as game/media but don't aggressively steal focus.
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.game,
+        audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playback,
+        // Allow mixing with other audio on iOS.
+        options: {AVAudioSessionOptions.mixWithOthers},
+      ),
+    ),
+  );
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

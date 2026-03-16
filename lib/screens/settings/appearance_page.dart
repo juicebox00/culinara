@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/stroked_button_label.dart';
 import '../../services/app_appearance.dart';
 
 class AppearancePage extends StatelessWidget {
@@ -11,13 +10,13 @@ class AppearancePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8EFE3),
       appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 194, 143, 96),
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF5E6D3),
+        foregroundColor: const Color(0xFF5D4A3A),
         centerTitle: true,
-        title: const StrokedButtonLabel(
+        elevation: 0,
+        title: Text(
           'Appearance',
-          fillColor: Colors.white,
-          strokeColor: Color(0xFF5D4A3A),
+          style: GoogleFonts.fredoka(fontWeight: FontWeight.bold),
         ),
       ),
       body: ValueListenableBuilder<Color>(

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:culinara/models/recipe.dart';
 import 'package:culinara/services/recipe_image_store_service.dart';
@@ -42,7 +43,8 @@ class RecipeStoreService {
       for (final doc in snapshot.docs) {
         final source = Map<String, dynamic>.from(doc.data());
         final migrated = await RecipeImageStoreService.migrateLegacyImageFields(source);
-        recipes.add(Recipe.fromMap(migrated));
+        final recipe = Recipe.fromMap(migrated);
+        recipes.add(await _ensureLocalImages(recipe));
       }
 
       // Cache locally for offline access
@@ -76,10 +78,11 @@ class RecipeStoreService {
 
       // Save new recipes
       for (final recipe in recipes) {
+        final synced = await _syncRecipeImages(recipe, userId);
         await _firestore
             .collection(recipesPath)
-            .doc(recipe.id)
-            .set(recipe.toMap());
+            .doc(synced.id)
+            .set(synced.toMap());
       }
 
       // Cache locally
@@ -89,6 +92,94 @@ class RecipeStoreService {
       // Still cache locally as fallback
       await _cacheRecipesLocally(recipes);
     }
+  }
+
+  /// Uploads any local images that don't yet have a Firebase Storage URL.
+  /// Returns an updated Recipe with storage URLs filled in.
+  static Future<Recipe> _syncRecipeImages(
+    Recipe recipe,
+    String userId,
+  ) async {
+    String? coverUrl = recipe.coverImageStorageUrl;
+    final List<String> galleryUrls = List.from(recipe.cookedImageGalleryUrls);
+
+    // Upload cover image if it has a local file but no storage URL yet
+    final localCover = recipe.coverImageFilePath;
+    if ((coverUrl == null || coverUrl.isEmpty) &&
+        localCover != null &&
+        localCover.isNotEmpty) {
+      coverUrl = await RecipeImageStoreService.uploadCoverImage(
+        localFilePath: localCover,
+        userId: userId,
+        recipeId: recipe.id,
+      );
+    }
+
+    // Upload gallery images that don't have a storage URL yet
+    final localGallery = recipe.cookedImageGalleryPaths;
+    for (int i = galleryUrls.length; i < localGallery.length; i++) {
+      final url = await RecipeImageStoreService.uploadGalleryImage(
+        localFilePath: localGallery[i],
+        userId: userId,
+        recipeId: recipe.id,
+        index: i,
+      );
+      if (url != null) galleryUrls.add(url);
+    }
+
+    return recipe.copyWith(
+      coverImageStorageUrl: coverUrl,
+      cookedImageGalleryUrls: galleryUrls,
+    );
+  }
+
+  /// Downloads images from Firebase Storage when local files are missing.
+  /// Returns an updated Recipe with local file paths filled in.
+  static Future<Recipe> _ensureLocalImages(Recipe recipe) async {
+    String? localCover = recipe.coverImageFilePath;
+    final List<String> localGallery =
+        List.from(recipe.cookedImageGalleryPaths);
+
+    // Download cover if missing locally but available in Storage
+    final storageUrl = recipe.coverImageStorageUrl;
+    if (storageUrl != null && storageUrl.isNotEmpty) {
+      final missing = localCover == null ||
+          localCover.isEmpty ||
+          !File(localCover).existsSync();
+      if (missing) {
+        localCover = await RecipeImageStoreService.downloadFromStorage(
+          url: storageUrl,
+          recipeId: recipe.id,
+          slot: 'cover',
+        );
+      }
+    }
+
+    // Download gallery images that are missing locally
+    final galleryUrls = recipe.cookedImageGalleryUrls;
+    for (int i = 0; i < galleryUrls.length; i++) {
+      final localExists =
+          i < localGallery.length && File(localGallery[i]).existsSync();
+      if (!localExists) {
+        final path = await RecipeImageStoreService.downloadFromStorage(
+          url: galleryUrls[i],
+          recipeId: recipe.id,
+          slot: 'cooked_$i',
+        );
+        if (path != null) {
+          if (i < localGallery.length) {
+            localGallery[i] = path;
+          } else {
+            localGallery.add(path);
+          }
+        }
+      }
+    }
+
+    return recipe.copyWith(
+      coverImageFilePath: localCover,
+      cookedImageGalleryPaths: localGallery,
+    );
   }
 
   /// Cache recipes locally in SharedPreferences
