@@ -21,6 +21,8 @@ class Recipe {
   final List<Uint8List> cookedImageGalleryBytes;
   bool isPinned;
   bool cooked;
+  bool deleted;
+  DateTime? deletedAt;
 
   Recipe({
     required this.id,
@@ -42,6 +44,8 @@ class Recipe {
     this.cookedImageGalleryBytes = const [],
     this.isPinned = false,
     this.cooked = false,
+    this.deleted = false,
+    this.deletedAt,
   });
 
   Recipe copyWith({
@@ -67,6 +71,8 @@ class Recipe {
     bool clearCoverImageFilePath = false,
     bool clearCoverImageBytes = false,
     bool clearCoverImageStorageUrl = false,
+    bool? deleted,
+    DateTime? deletedAt,
   }) {
     return Recipe(
       id: id ?? this.id,
@@ -97,6 +103,8 @@ class Recipe {
           cookedImageGalleryBytes ?? this.cookedImageGalleryBytes,
       isPinned: isPinned ?? this.isPinned,
       cooked: cooked ?? this.cooked,
+      deleted: deleted ?? this.deleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -123,6 +131,8 @@ class Recipe {
           .toList(growable: false),
       'isPinned': isPinned,
       'cooked': cooked,
+      'deleted': deleted,
+      'deletedAt': deletedAt?.toIso8601String(),
     };
   }
 
@@ -193,8 +203,12 @@ class Recipe {
           ? rawTags.map((e) => e.toString()).toList(growable: false)
           : const <String>[],
       cookedImageGalleryBytes: cookedGallery,
-      isPinned: map['isPinned'] == true,
-      cooked: map['cooked'] == true,
+        isPinned: map['isPinned'] == true,
+        cooked: map['cooked'] == true,
+        deleted: map['deleted'] == true,
+        deletedAt: map['deletedAt'] != null && map['deletedAt'] is String && (map['deletedAt'] as String).isNotEmpty
+          ? DateTime.tryParse(map['deletedAt'])
+          : null,
     );
   }
 }

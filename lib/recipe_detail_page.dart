@@ -973,6 +973,23 @@ class _CookModePageState extends State<_CookModePage> {
   bool _isAlarmRinging = false;
   bool _allowExitWithoutPrompt = false;
 
+  // Method to check if text needs scrolling
+  Future<bool> _measureText(Text textWidget, BoxConstraints constraints) async {
+    final textPainter = TextPainter(
+      text: textWidget.textSpan ?? TextSpan(
+        text: textWidget.data ?? '',
+        style: textWidget.style,
+      ),
+      textDirection: TextDirection.ltr,
+      textScaleFactor: MediaQuery.of(context).textScaleFactor,
+    );
+    
+    textPainter.layout(maxWidth: constraints.maxWidth - 40); // Account for padding
+    
+    // If text height exceeds available container height, it needs scrolling
+    return textPainter.size.height > constraints.maxHeight - 40; // Account for padding
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1483,16 +1500,39 @@ class _CookModePageState extends State<_CookModePage> {
                       width: 2,
                     ),
                   ),
-                  child: Center(
-                    child: Text(
-                      currentStep.text,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.fredoka(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF5D4A3A),
-                      ),
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Create a text widget to measure its size
+                      final textWidget = Text(
+                        currentStep.text,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.fredoka(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D4A3A),
+                        ),
+                      );
+                      
+                      // Use a future to measure text size and decide if scrolling is needed
+                      return FutureBuilder(
+                        future: _measureText(textWidget, constraints),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data == true) {
+                            // Text is too long, make it scrollable
+                            return SingleChildScrollView(
+                              child: Center(
+                                child: textWidget,
+                              ),
+                            );
+                          } else {
+                            // Text fits, no scrolling needed
+                            return Center(
+                              child: textWidget,
+                            );
+                          }
+                        },
+                      );
+                    },
                   ),
                 ),
               ),

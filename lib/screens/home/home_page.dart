@@ -11,8 +11,12 @@ import 'package:culinara/screens/home/general_tools_page.dart';
 import 'package:culinara/screens/home/add_recipe_page.dart';
 import 'package:culinara/screens/home/drafts_page.dart';
 import 'package:culinara/screens/home/tags_page.dart';
+import 'package:culinara/screens/home/trash_bin_page.dart';
+import 'package:culinara/screens/home/recently_viewed_page.dart';
 import 'package:culinara/services/recipe_store_service.dart';
 import 'package:culinara/services/ui_sound_service.dart';
+import 'package:culinara/services/auth_service.dart';
+import 'package:culinara/services/recently_viewed_service.dart';
 import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -27,6 +31,8 @@ class _HomePageState extends State<HomePage> {
   static const int _draftsTab = 1;
   static const int _tagsTab = 2;
   static const int _settingsTab = 3;
+  static const int _recentlyViewedTab = 4;
+  static const int _trashBinTab = 5;
   static const String _allShelvesFilter = 'All';
   static const int _maxVisibleShelves = 5;
 
@@ -40,22 +46,44 @@ class _HomePageState extends State<HomePage> {
 
   List<Recipe> recipes = [];
   bool _isLoadingRecipes = true;
+  Map<String, dynamic>? _userData;
+  final _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
     _loadRecipes();
+    _loadUserData();
   }
 
   Future<void> _loadRecipes() async {
-    final storedRecipes = await RecipeStoreService.loadRecipes();
-
-    if (!mounted) return;
     setState(() {
-      recipes = storedRecipes;
-      _syncSelectedShelfFilter(storedRecipes);
-      _isLoadingRecipes = false;
+      _isLoadingRecipes = true;
     });
+    try {
+      final loadedRecipes = await RecipeStoreService.loadRecipes();
+      setState(() {
+        recipes = loadedRecipes; // Load all recipes including deleted ones
+        _isLoadingRecipes = false;
+      });
+      _syncSelectedShelfFilter(recipes);
+    } catch (e) {
+      setState(() {
+        _isLoadingRecipes = false;
+      });
+      debugPrint('Error loading recipes: $e');
+    }
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final userData = await _authService.getUserData();
+      setState(() {
+        _userData = userData;
+      });
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+    }
   }
 
   List<String> _allShelvesFromRecipes(List<Recipe> source) {
@@ -472,10 +500,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<Recipe> _filterRecipesByShelf(List<Recipe> source) {
-    if (_selectedShelfFilter == _allShelvesFilter) return source;
+    if (_selectedShelfFilter == _allShelvesFilter) return source.where((r) => !r.deleted).toList();
     final needle = _selectedShelfFilter.toLowerCase();
     return source
         .where((recipe) {
+          if (recipe.deleted) return false; // Exclude deleted recipes
           return recipe.shelves.any((shelf) => shelf.toLowerCase() == needle);
         })
         .toList(growable: false);
@@ -483,6 +512,28 @@ class _HomePageState extends State<HomePage> {
 
   void _persistRecipes() {
     RecipeStoreService.saveRecipes(recipes);
+  }
+
+  void _restoreRecipe(Recipe recipe) {
+    setState(() {
+      final index = recipes.indexWhere((r) => r.id == recipe.id);
+      if (index != -1) {
+        recipes[index] = recipes[index].copyWith(
+          deleted: false,
+          deletedAt: null,
+        );
+      }
+    });
+    _persistRecipes();
+    UiSoundService.instance.playButtonBeep();
+  }
+
+  void _deleteRecipePermanently(Recipe recipe) {
+    setState(() {
+      recipes.removeWhere((r) => r.id == recipe.id);
+    });
+    _persistRecipes();
+    UiSoundService.instance.playButtonBeep();
   }
 
   void _onRecipePin(Recipe recipe) {
@@ -609,7 +660,7 @@ class _HomePageState extends State<HomePage> {
     if (_selectedRecipeIds.isEmpty) return;
 
     final count = _selectedRecipeIds.length;
-    final shouldDelete = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFFF8EFE3),
@@ -618,14 +669,14 @@ class _HomePageState extends State<HomePage> {
           side: const BorderSide(color: Color(0xFF8B6F47), width: 2),
         ),
         title: Text(
-          'Delete $count recipes?',
+          'Move $count recipes to trash?',
           style: GoogleFonts.fredoka(
             fontWeight: FontWeight.bold,
             color: const Color(0xFF5D4A3A),
           ),
         ),
         content: Text(
-          'This will remove the selected recipes from your collection.',
+          'These recipes will be moved to the trash bin and can be restored within 30 days.',
           style: GoogleFonts.fredoka(
             fontWeight: FontWeight.bold,
             color: const Color(0xFF5D4A3A),
@@ -639,7 +690,7 @@ class _HomePageState extends State<HomePage> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const StrokedButtonLabel(
-              'Delete',
+              'Move to Trash',
               fillColor: Color(0xFF9C2D2D),
               strokeColor: Color(0xFFF5E6D3),
             ),
@@ -648,10 +699,18 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    if (shouldDelete != true) return;
+    if (confirmed != true) return;
 
     setState(() {
-      recipes.removeWhere((recipe) => _selectedRecipeIds.contains(recipe.id));
+      for (final recipeId in _selectedRecipeIds) {
+        final index = recipes.indexWhere((r) => r.id == recipeId);
+        if (index != -1) {
+          recipes[index] = recipes[index].copyWith(
+            deleted: true,
+            deletedAt: DateTime.now(),
+          );
+        }
+      }
       _selectedRecipeIds.clear();
       _isSelectionMode = false;
       _syncSelectedShelfFilter(recipes);
@@ -660,11 +719,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onRecipeDelete(Recipe recipe) {
+    _moveRecipeToTrash(recipe);
+  }
+
+  void _moveRecipeToTrash(Recipe recipe) {
     setState(() {
-      recipes.removeWhere((r) => r.id == recipe.id);
-      _syncSelectedShelfFilter(recipes);
+      final index = recipes.indexWhere((r) => r.id == recipe.id);
+      if (index != -1) {
+        recipes[index] = recipes[index].copyWith(
+          deleted: true,
+          deletedAt: DateTime.now(),
+        );
+      }
     });
     _persistRecipes();
+    UiSoundService.instance.playButtonBeep();
   }
 
   void _upsertRecipe(Recipe recipe) {
@@ -681,6 +750,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onRecipeCardTap(Recipe recipe) {
+    debugPrint('Adding recipe to recently viewed: ${recipe.title}');
+    RecentlyViewedService.addToRecentlyViewed(recipe.id);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -758,6 +829,10 @@ class _HomePageState extends State<HomePage> {
         return 'My Tags';
       case _settingsTab:
         return 'Settings';
+      case _recentlyViewedTab:
+        return 'Recently Viewed';
+      case _trashBinTab:
+        return 'Trash Bin';
       default:
         return 'Culinara';
     }
@@ -765,14 +840,16 @@ class _HomePageState extends State<HomePage> {
 
   List<Recipe> _filteredRecipesByQuery(List<Recipe> source) {
     final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return source;
+    if (query.isEmpty) return source.where((r) => !r.deleted).toList();
 
     final isTagQuery = query.startsWith('#');
     final tagNeedle = isTagQuery ? query.substring(1).trim() : query;
-    if (isTagQuery && tagNeedle.isEmpty) return source;
+    if (isTagQuery && tagNeedle.isEmpty) return source.where((r) => !r.deleted).toList();
 
     return source
         .where((recipe) {
+          if (recipe.deleted) return false; // Exclude deleted recipes
+          
           final title = recipe.title.toLowerCase();
           final ingredients = recipe.ingredients.toLowerCase();
           final tags = recipe.tags
@@ -1262,6 +1339,20 @@ class _HomePageState extends State<HomePage> {
         case _settingsTab:
           content = const SettingsPage();
           break;
+        case _recentlyViewedTab:
+          content = RecentlyViewedPage(
+            recipes: recipes,
+            onRecipeTap: _onRecipeCardTap,
+          );
+          break;
+        case _trashBinTab:
+          final trashedRecipes = recipes.where((r) => r.deleted).toList();
+          content = TrashBinPage(
+            trashedRecipes: trashedRecipes,
+            onRestore: _restoreRecipe,
+            onDeletePermanently: _deleteRecipePermanently,
+          );
+          break;
         default:
           content = Center(
             child: Text(
@@ -1341,6 +1432,18 @@ class _HomePageState extends State<HomePage> {
                     icon: Icons.settings_rounded,
                     tab: _settingsTab,
                   ),
+                  const SizedBox(height: 12),
+                  _buildDrawerItem(
+                    label: 'Recently Viewed',
+                    icon: Icons.history_rounded,
+                    tab: _recentlyViewedTab,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDrawerItem(
+                    label: 'Trash Bin',
+                    icon: Icons.delete_rounded,
+                    tab: _trashBinTab,
+                  ),
                 ],
               ),
             ),
@@ -1405,6 +1508,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRecipeCount(int count) {
+    final userName = _userData?['name'] as String?;
+    final personalizedText = userName != null && userName.isNotEmpty 
+        ? '$count saved recipes, $userName!'
+        : '$count saved recipes';
+    
     return Container(
       margin: EdgeInsets.symmetric(vertical: 10),
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -1413,7 +1521,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        '$count saved recipes',
+        personalizedText,
         style: GoogleFonts.fredoka(
           color: Colors.white,
           fontWeight: FontWeight.bold,

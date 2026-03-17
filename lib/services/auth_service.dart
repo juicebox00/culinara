@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import 'package:culinara/services/recipe_store_service.dart';
 
 class AuthService {
@@ -9,6 +10,34 @@ class AuthService {
 
   // Get current user
   User? get currentUser => _firebaseAuth.currentUser;
+
+  // Get user data from Firestore
+  Future<Map<String, dynamic>?> getUserData() async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+      
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      return doc.data();
+    } catch (e) {
+      debugPrint('Error getting user data: $e');
+      return null;
+    }
+  }
+
+  // Update user name in Firestore
+  Future<void> updateUserName(String newName) async {
+    try {
+      final user = currentUser;
+      if (user == null) throw 'User not authenticated';
+      
+      await _firestore.collection('users').doc(user.uid).update({
+        'name': newName,
+      });
+    } catch (e) {
+      throw 'Failed to update name: $e';
+    }
+  }
 
   // Register with email and password
   Future<UserCredential> registerWithEmail({

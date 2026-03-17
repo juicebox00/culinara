@@ -21,6 +21,10 @@ class _AccountPageState extends State<AccountPage> {
     final TextEditingController _changePasswordNewController = TextEditingController();
     final TextEditingController _changePasswordConfirmController = TextEditingController();
     final TextEditingController _deleteAccountPasswordController = TextEditingController();
+    final TextEditingController _changeNameController = TextEditingController();
+    
+    Map<String, dynamic>? _userData;
+    bool _isLoadingUserData = true;
     @override
     void dispose() {
       _changeEmailController.dispose();
@@ -29,7 +33,29 @@ class _AccountPageState extends State<AccountPage> {
       _changePasswordNewController.dispose();
       _changePasswordConfirmController.dispose();
       _deleteAccountPasswordController.dispose();
+      _changeNameController.dispose();
       super.dispose();
+    }
+
+    @override
+    void initState() {
+      super.initState();
+      _loadUserData();
+    }
+
+    Future<void> _loadUserData() async {
+      try {
+        final userData = await _authService.getUserData();
+        setState(() {
+          _userData = userData;
+          _isLoadingUserData = false;
+        });
+      } catch (e) {
+        setState(() {
+          _isLoadingUserData = false;
+        });
+        debugPrint('Error loading user data: $e');
+      }
     }
   static const Color _primaryTextColor = Color(0xFF5D4A3A);
   static const Color _dangerTextColor = Color(0xFF9C2D2D);
@@ -95,6 +121,92 @@ class _AccountPageState extends State<AccountPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? const Color(0xFF9C2D2D) : null,
+      ),
+    );
+  }
+
+  Future<void> _showChangeNameDialog() async {
+    final currentName = _userData?['name'] ?? '';
+    _changeNameController.text = currentName;
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: _dialogBackgroundColor,
+          shape: _dialogShape(),
+          title: _dialogTitle('Change Name'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _changeNameController,
+                style: const TextStyle(
+                  fontFamily: 'Fredoka',
+                  fontWeight: FontWeight.bold,
+                  color: _primaryTextColor,
+                ),
+                decoration: _dialogInputDecoration('Full name'),
+                maxLength: 50,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () {
+                      Navigator.pop(dialogContext);
+                    },
+              child: const StrokedButtonLabel('Cancel'),
+            ),
+            TextButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final newName = _changeNameController.text.trim();
+                      
+                      if (newName.isEmpty) {
+                        _showMessage(
+                          'Name cannot be empty.',
+                          isError: true,
+                        );
+                        return;
+                      }
+
+                      if (newName == currentName) {
+                        Navigator.pop(dialogContext);
+                        return;
+                      }
+
+                      setState(() => isSubmitting = true);
+                      try {
+                        await _authService.updateUserName(newName);
+                        if (!mounted || !dialogContext.mounted) return;
+                        Navigator.pop(dialogContext);
+                        await _loadUserData(); // Reload user data
+                        _showMessage('Name updated successfully.');
+                      } catch (e) {
+                        _showMessage(e.toString(), isError: true);
+                      } finally {
+                        if (mounted) setState(() => isSubmitting = false);
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _primaryTextColor,
+                      ),
+                    )
+                  : const StrokedButtonLabel('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -524,7 +636,55 @@ class _AccountPageState extends State<AccountPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
+                  // User Info Display
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5E6D3),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF8B6F47)),
+                    ),
+                    child: _isLoadingUserData
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: _primaryTextColor,
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Profile Information',
+                                style: GoogleFonts.fredoka(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: _primaryTextColor,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildInfoRow(
+                                'Name',
+                                _userData?['name'] ?? 'Not set',
+                                Icons.person,
+                              ),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(
+                                'Email',
+                                _authService.currentUser?.email ?? 'Not available',
+                                Icons.email,
+                              ),
+                            ],
+                          ),
+                  ),
                   const SizedBox(height: 28),
+                  // Change Name (always available)
+                  _buildActionButton(
+                    icon: Icons.person,
+                    label: 'Change Name',
+                    onTap: _showChangeNameDialog,
+                  ),
+                  const SizedBox(height: 12),
                   // Only show "Change Email" for email/password users
                   if (_userHasPassword()) ...[
                     _buildActionButton(
@@ -574,38 +734,81 @@ class _AccountPageState extends State<AccountPage> {
     required VoidCallback onTap,
     bool isDanger = false,
   }) {
-    final Color backgroundColor = isDanger
-        ? const Color(0xFFD36B6B)
-        : const Color.fromARGB(255, 194, 143, 96);
-    final Color borderColor = isDanger
-        ? const Color(0xFF9C2D2D)
-        : const Color.fromARGB(255, 93, 74, 58);
-
     return TapBounce(
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(16),
+          color: isDanger ? const Color(0xFFFFF5F5) : const Color(0xFFF5E6D3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDanger ? _dangerTextColor : const Color(0xFF8B6F47),
+          ),
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StrokedButtonLabel(
-                label,
-                fillColor: Colors.white,
-                strokeColor: borderColor,
-                fontSize: 18,
+            Icon(
+              icon,
+              color: isDanger ? _dangerTextColor : _primaryTextColor,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.fredoka(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDanger ? _dangerTextColor : _primaryTextColor,
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
+            const Spacer(),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: isDanger ? _dangerTextColor : _primaryTextColor,
+              size: 16,
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          color: _primaryTextColor,
+          size: 20,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.fredoka(
+                  fontSize: 12,
+                  color: const Color(0xFF8B6F47),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.fredoka(
+                  fontSize: 16,
+                  color: _primaryTextColor,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:culinara/widgets/tap_bounce.dart';
 import 'timer_tool_page.dart';
 import 'units_converter_page.dart';
 import 'meal_picker_page.dart';
+import 'servings_calculator_page.dart';
 
 class GeneralToolsPage extends StatelessWidget {
   const GeneralToolsPage({
@@ -38,6 +39,15 @@ class GeneralToolsPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) =>
             MealPickerPage(recipes: recipes, onRecipeTap: onRecipeTap),
+      ),
+    );
+  }
+
+  void _openServingsCalculator(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServingsCalculatorPage(recipes: recipes),
       ),
     );
   }
@@ -79,6 +89,14 @@ class GeneralToolsPage extends StatelessWidget {
             subtitle: 'Pick what to cook when you cannot decide.',
             icon: Icons.restaurant_menu_rounded,
             onTap: () => _openMealPicker(context),
+          ),
+          const SizedBox(height: 12),
+          _buildToolButton(
+            context: context,
+            label: 'Servings Calculator',
+            subtitle: 'Scale recipe ingredients for different serving sizes.',
+            icon: Icons.calculate_rounded,
+            onTap: () => _openServingsCalculator(context),
           ),
         ],
       ),
